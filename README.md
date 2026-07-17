@@ -32,9 +32,12 @@ Create a local `.env.local` file with these values, then run the SQL file in [su
 ```bash
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-public-key
+VITE_ENABLE_PREVIEW_AUTH=false
 ```
 
 When both values are present, the app uses Supabase Auth and data APIs; otherwise it falls back to the built-in mock data flow.
+
+Preview role sign-in is disabled by default for production safety. Enable it only for local testing by setting `VITE_ENABLE_PREVIEW_AUTH=true`.
 
 For sign-in testing, create Supabase Auth users that match the seeded profile emails in [supabase/schema.sql](supabase/schema.sql) or your own users with the same role metadata shape used in [src/services/authService.ts](src/services/authService.ts).
 

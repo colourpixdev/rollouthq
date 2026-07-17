@@ -20,6 +20,15 @@ export function LoginPage() {
   const { signInAs, signInWithEmailPassword } = useAuth();
   const navigate = useNavigate();
   const [formError, setFormError] = useState<string | null>(null);
+  const enablePreviewAuth = import.meta.env.DEV || import.meta.env.VITE_ENABLE_PREVIEW_AUTH === 'true';
+
+  const seededAuthEmails = [
+    'beverley@colourpix.co.za',
+    'francois@colourpix.co.za',
+    'head.office@psg.co.za',
+    'john.smith@psg.co.za',
+    'ops@abcsignage.co.za',
+  ];
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -48,6 +57,18 @@ export function LoginPage() {
         <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">
           Sign in with Supabase credentials, or use the role buttons below to preview the dashboard without a backend.
         </p>
+
+        <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+          <p className="font-semibold">Auth users required</p>
+          <p className="mt-1 leading-6 text-amber-50/90">
+            The database is connected, but email/password sign-in only works if these emails also exist in Supabase Auth:
+          </p>
+          <ul className="mt-3 grid gap-1 text-xs text-amber-50/90 md:grid-cols-2">
+            {seededAuthEmails.map((email) => (
+              <li key={email}>{email}</li>
+            ))}
+          </ul>
+        </div>
 
         <form onSubmit={onSubmit} className="mt-8 rounded-3xl border border-white/10 bg-slate-950/55 p-5">
           <div className="grid gap-4 md:grid-cols-2">
@@ -87,22 +108,24 @@ export function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          {roles.map((role) => (
-            <button
-              key={role}
-              type="button"
-              onClick={() => {
-                signInAs(role);
-                navigate('/');
-              }}
-              className="rounded-3xl border border-white/10 bg-slate-950/60 p-5 text-left transition hover:-translate-y-0.5 hover:border-sky-400/40 hover:bg-slate-900/80"
-            >
-              <p className="text-sm text-slate-400">Role</p>
-              <p className="mt-2 text-lg font-semibold text-white">{roleLabels[role]}</p>
-            </button>
-          ))}
-        </div>
+        {enablePreviewAuth ? (
+          <div className="mt-8 grid gap-4 md:grid-cols-2">
+            {roles.map((role) => (
+              <button
+                key={role}
+                type="button"
+                onClick={() => {
+                  signInAs(role);
+                  navigate('/');
+                }}
+                className="rounded-3xl border border-white/10 bg-slate-950/60 p-5 text-left transition hover:-translate-y-0.5 hover:border-sky-400/40 hover:bg-slate-900/80"
+              >
+                <p className="text-sm text-slate-400">Role</p>
+                <p className="mt-2 text-lg font-semibold text-white">{roleLabels[role]}</p>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -36,13 +36,17 @@ create table if not exists public.profiles (
 alter table public.projects enable row level security;
 alter table public.profiles enable row level security;
 
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table public.projects to authenticated;
+grant select, insert, update, delete on table public.profiles to authenticated;
+
 do $$
 begin
-  create policy "Public read access to projects"
+  create policy "Authenticated read access to projects"
     on public.projects
     for select
     to authenticated
-    using (auth.role() = 'authenticated');
+    using (true);
 exception
   when duplicate_object then null;
 end $$;
@@ -53,7 +57,7 @@ begin
     on public.projects
     for insert
     to authenticated
-    with check (auth.role() = 'authenticated');
+    with check (true);
 exception
   when duplicate_object then null;
 end $$;
@@ -64,8 +68,8 @@ begin
     on public.projects
     for update
     to authenticated
-    using (auth.role() = 'authenticated')
-    with check (auth.role() = 'authenticated');
+    using (true)
+    with check (true);
 exception
   when duplicate_object then null;
 end $$;
@@ -76,18 +80,18 @@ begin
     on public.projects
     for delete
     to authenticated
-    using (auth.role() = 'authenticated');
+    using (true);
 exception
   when duplicate_object then null;
 end $$;
 
 do $$
 begin
-  create policy "Public read access to profiles"
+  create policy "Authenticated read access to profiles"
     on public.profiles
     for select
     to authenticated
-    using (auth.role() = 'authenticated');
+    using (true);
 exception
   when duplicate_object then null;
 end $$;
@@ -98,7 +102,7 @@ begin
     on public.profiles
     for insert
     to authenticated
-    with check (auth.role() = 'authenticated');
+    with check (true);
 exception
   when duplicate_object then null;
 end $$;
@@ -109,8 +113,8 @@ begin
     on public.profiles
     for update
     to authenticated
-    using (auth.role() = 'authenticated')
-    with check (auth.role() = 'authenticated');
+    using (true)
+    with check (true);
 exception
   when duplicate_object then null;
 end $$;
@@ -121,7 +125,7 @@ begin
     on public.profiles
     for delete
     to authenticated
-    using (auth.role() = 'authenticated');
+    using (true);
 exception
   when duplicate_object then null;
 end $$;
