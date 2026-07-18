@@ -9,6 +9,16 @@ import type { Project, ProjectStage, ProjectStatus } from '../types/domain';
 
 type AppliedProject = Pick<Project, 'id' | 'branch' | 'currentStage' | 'status'>;
 
+type ManualVoiceUpdateForm = {
+  projectId: string;
+  currentStage: '' | ProjectStage;
+  status: '' | ProjectStatus;
+  installationDate: string;
+  targetDate: string;
+  comment: string;
+  tasks: string;
+};
+
 type VoiceSuggestion = {
   id: string;
   projectId: string;
@@ -287,6 +297,15 @@ export function VoiceUpdatesPage() {
   const [transcript, setTranscript] = useState('');
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [suggestions, setSuggestions] = useState<VoiceSuggestion[]>([]);
+  const [manualForm, setManualForm] = useState<ManualVoiceUpdateForm>({
+    projectId: '',
+    currentStage: '',
+    status: '',
+    installationDate: '',
+    targetDate: '',
+    comment: '',
+    tasks: '',
+  });
   const [appliedProjects, setAppliedProjects] = useState<AppliedProject[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -302,10 +321,15 @@ export function VoiceUpdatesPage() {
       return;
     }
 
+    if (!nextTranscript.trim()) {
+      setNotice('Add transcript text or use the structured update form before sending to the review queue.');
+      return;
+    }
+
     const matches = matchProjects(projects, nextTranscript);
     setSuggestions(matches);
     setAppliedProjects([]);
-    setNotice(matches.length > 0 ? `${matches.length} project update${matches.length === 1 ? '' : 's'} ready to review.` : 'No confident project matches found. Add the exact PSG branch name or project ID to the transcript and review again.');
+    setNotice(matches.length > 0 ? `${matches.length} project update${matches.length === 1 ? '' : 's'} ready to review.` : 'No confident project matches found. Select the project below and add the update to the review queue.');
   }
 
   const transcribeMutation = useMutation({
@@ -364,6 +388,47 @@ export function VoiceUpdatesPage() {
 
   function updateSuggestion(id: string, patch: Partial<VoiceSuggestion>) {
     setSuggestions((current) => current.map((suggestion) => (suggestion.id === id ? { ...suggestion, ...patch } : suggestion)));
+  }
+
+  function updateManualForm(patch: Partial<ManualVoiceUpdateForm>) {
+    setManualForm((current) => ({ ...current, ...patch }));
+  }
+
+  function addManualUpdateToReviewQueue() {
+    const project = projects.find((candidate) => candidate.id === manualForm.projectId);
+    if (!project) {
+      setNotice('Select a project before adding the update to the review queue.');
+      return;
+    }
+
+    const comment = manualForm.comment.trim() || getCurrentTranscript().trim();
+    const tasks = manualForm.tasks.trim();
+    const hasStructuredChange = Boolean(manualForm.currentStage || manualForm.status || manualForm.installationDate.trim() || manualForm.targetDate.trim() || comment || tasks);
+    if (!hasStructuredChange) {
+      setNotice('Add at least one update field before sending it to the review queue.');
+      return;
+    }
+
+    const status = manualForm.currentStage ? statusForStage(manualForm.currentStage, manualForm.status || project.status) : manualForm.status || undefined;
+    const suggestion: VoiceSuggestion = {
+      id: `manual-${project.id}-${Date.now()}`,
+      projectId: project.id,
+      branch: project.branch,
+      excerpt: comment || `${project.branch} manual update`,
+      confidence: 1,
+      selected: true,
+      currentStage: manualForm.currentStage || undefined,
+      status,
+      progress: manualForm.currentStage ? progressForStage(manualForm.currentStage) : undefined,
+      installationDate: manualForm.installationDate.trim() || undefined,
+      targetDate: manualForm.targetDate.trim() || undefined,
+      comment,
+      tasks,
+    };
+
+    setSuggestions((current) => [suggestion, ...current]);
+    setAppliedProjects([]);
+    setNotice('Structured project update added to the review queue.');
   }
 
   function updateTranscript(nextTranscript: string) {
@@ -436,7 +501,7 @@ export function VoiceUpdatesPage() {
             <button
               type="button"
               onClick={analyseTranscript}
-              disabled={!transcript.trim() || projects.length === 0}
+              disabled={projects.length === 0}
               className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Wand2 className="h-4 w-4" />
@@ -485,12 +550,109 @@ export function VoiceUpdatesPage() {
             <button
               type="button"
               onClick={analyseTranscript}
-              disabled={!transcript.trim() || projects.length === 0}
+              disabled={projects.length === 0}
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Wand2 className="h-4 w-4" />
               Send to review queue
             </button>
+          </div>
+
+          <div className="mt-5 rounded-3xl border border-white/10 bg-white/5 p-4">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-200">Structured update</h3>
+              <p className="text-xs text-slate-400">Use this when the transcript does not name the project clearly.</p>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <label className="grid gap-2 text-sm text-slate-300 md:col-span-2">
+                Project
+                <select
+                  value={manualForm.projectId}
+                  onChange={(event) => updateManualForm({ projectId: event.target.value })}
+                  className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50"
+                >
+                  <option value="">Select project</option>
+                  {projects.map((project) => <option key={project.id} value={project.id}>{project.branch} · {project.id}</option>)}
+                </select>
+              </label>
+
+              <label className="grid gap-2 text-sm text-slate-300">
+                Stage
+                <select
+                  value={manualForm.currentStage}
+                  onChange={(event) => updateManualForm({ currentStage: event.target.value as ManualVoiceUpdateForm['currentStage'] })}
+                  className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50"
+                >
+                  <option value="">No stage change</option>
+                  {timelineStages.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
+                </select>
+              </label>
+
+              <label className="grid gap-2 text-sm text-slate-300">
+                Status
+                <select
+                  value={manualForm.status}
+                  onChange={(event) => updateManualForm({ status: event.target.value as ManualVoiceUpdateForm['status'] })}
+                  className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50"
+                >
+                  <option value="">No status change</option>
+                  {statusOptions.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
+                </select>
+              </label>
+
+              <label className="grid gap-2 text-sm text-slate-300">
+                Installation date
+                <input
+                  value={manualForm.installationDate}
+                  onChange={(event) => updateManualForm({ installationDate: event.target.value })}
+                  className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50"
+                  placeholder="15 August"
+                />
+              </label>
+
+              <label className="grid gap-2 text-sm text-slate-300">
+                Target date
+                <input
+                  value={manualForm.targetDate}
+                  onChange={(event) => updateManualForm({ targetDate: event.target.value })}
+                  className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50"
+                  placeholder="30 August"
+                />
+              </label>
+
+              <label className="grid gap-2 text-sm text-slate-300 md:col-span-2">
+                Comment
+                <textarea
+                  value={manualForm.comment}
+                  onChange={(event) => updateManualForm({ comment: event.target.value })}
+                  rows={3}
+                  className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50"
+                  placeholder="Branch confirmed production is underway."
+                />
+              </label>
+
+              <label className="grid gap-2 text-sm text-slate-300 md:col-span-2">
+                Tasks
+                <textarea
+                  value={manualForm.tasks}
+                  onChange={(event) => updateManualForm({ tasks: event.target.value })}
+                  rows={2}
+                  className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50"
+                  placeholder="One task per line"
+                />
+              </label>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={addManualUpdateToReviewQueue}
+                disabled={projects.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ClipboardCheck className="h-4 w-4" />
+                Add form update to review queue
+              </button>
+            </div>
           </div>
 
           {notice ? <p className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">{notice}</p> : null}
