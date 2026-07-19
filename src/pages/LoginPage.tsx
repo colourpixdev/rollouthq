@@ -17,12 +17,22 @@ const loginSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
+const accessRequestSchema = z.object({
+  name: z.string().trim().min(2, 'Enter your name'),
+  email: z.string().trim().toLowerCase().email('Enter a valid email address'),
+  organisation: z.string().trim().min(2, 'Enter your organisation'),
+  roleRequested: z.string().trim().min(2, 'Enter the role or access you need'),
+  reason: z.string().trim().min(10, 'Add a short reason for access'),
+});
+
 type LoginFormValues = z.infer<typeof loginSchema>;
+type AccessRequestFormValues = z.infer<typeof accessRequestSchema>;
 
 export function LoginPage() {
   const { signInAs, signInWithEmailPassword } = useAuth();
   const navigate = useNavigate();
   const [formError, setFormError] = useState<string | null>(null);
+  const [accessRequestNotice, setAccessRequestNotice] = useState<string | null>(null);
   const [setupBannerDismissed, setSetupBannerDismissed] = useState(false);
   const enablePreviewAuth = import.meta.env.DEV || import.meta.env.VITE_ENABLE_PREVIEW_AUTH === 'true';
 
@@ -42,6 +52,21 @@ export function LoginPage() {
     },
   });
 
+  const {
+    register: registerAccessRequest,
+    handleSubmit: handleAccessRequestSubmit,
+    formState: { errors: accessRequestErrors },
+  } = useForm<AccessRequestFormValues>({
+    resolver: zodResolver(accessRequestSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      organisation: '',
+      roleRequested: '',
+      reason: '',
+    },
+  });
+
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
 
@@ -51,6 +76,26 @@ export function LoginPage() {
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Unable to sign in. Check your credentials and Supabase config.');
     }
+  });
+
+  const onAccessRequestSubmit = handleAccessRequestSubmit((values) => {
+    const subject = `RolloutHQ access request - ${values.name}`;
+    const body = [
+      'Please add me as a RolloutHQ user.',
+      '',
+      `Name: ${values.name}`,
+      `Email: ${values.email}`,
+      `Organisation: ${values.organisation}`,
+      `Requested access: ${values.roleRequested}`,
+      '',
+      'Reason:',
+      values.reason,
+      '',
+      `Workspace: ${productBrand.workspace}`,
+    ].join('\n');
+
+    window.location.href = `mailto:francois@colourpix.co.za?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setAccessRequestNotice('Your email app should open with the access request addressed to francois@colourpix.co.za.');
   });
 
   return (
@@ -144,6 +189,54 @@ export function LoginPage() {
             className="mt-5 inline-flex items-center justify-center rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? 'Signing in...' : 'Sign in'}
+          </button>
+        </form>
+
+        <form onSubmit={onAccessRequestSubmit} className="mt-5 rounded-3xl border border-teal-400/15 bg-teal-400/8 p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">Request access</p>
+              <p className="mt-1 text-sm leading-6 text-slate-400">Need to be added as a user? Send an access request to Francois.</p>
+            </div>
+            <span className="rounded-full border border-teal-300/25 bg-teal-300/10 px-3 py-1 text-xs font-semibold text-teal-100">francois@colourpix.co.za</span>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="grid gap-2 text-sm text-slate-300">
+              Full name
+              <input {...registerAccessRequest('name')} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-teal-300/50" placeholder="Your name" />
+              {accessRequestErrors.name ? <span className="text-xs text-red-300">{accessRequestErrors.name.message}</span> : null}
+            </label>
+
+            <label className="grid gap-2 text-sm text-slate-300">
+              Work email
+              <input type="email" autoComplete="email" {...registerAccessRequest('email')} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-teal-300/50" placeholder="name@company.co.za" />
+              {accessRequestErrors.email ? <span className="text-xs text-red-300">{accessRequestErrors.email.message}</span> : null}
+            </label>
+
+            <label className="grid gap-2 text-sm text-slate-300">
+              Organisation
+              <input {...registerAccessRequest('organisation')} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-teal-300/50" placeholder="Company or branch" />
+              {accessRequestErrors.organisation ? <span className="text-xs text-red-300">{accessRequestErrors.organisation.message}</span> : null}
+            </label>
+
+            <label className="grid gap-2 text-sm text-slate-300">
+              Access needed
+              <input {...registerAccessRequest('roleRequested')} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-teal-300/50" placeholder="Branch manager, head office, installer..." />
+              {accessRequestErrors.roleRequested ? <span className="text-xs text-red-300">{accessRequestErrors.roleRequested.message}</span> : null}
+            </label>
+          </div>
+
+          <label className="mt-4 grid gap-2 text-sm text-slate-300">
+            Reason for access
+            <textarea rows={3} {...registerAccessRequest('reason')} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-teal-300/50" placeholder="Tell us which project, branch, or rollout workspace you need access to." />
+            {accessRequestErrors.reason ? <span className="text-xs text-red-300">{accessRequestErrors.reason.message}</span> : null}
+          </label>
+
+          {accessRequestNotice ? <p className="mt-4 text-sm text-teal-100">{accessRequestNotice}</p> : null}
+
+          <button type="submit" className="mt-5 inline-flex items-center justify-center rounded-2xl bg-teal-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-teal-300">
+            Send access request
           </button>
         </form>
 
