@@ -1,6 +1,6 @@
-# PSG Signage Rollout Portal
+# RolloutHQ™
 
-A secure, role-aware rollout management portal for tracking PSG signage projects from quotation through installation and completion.
+Enterprise Rollout Management Platform licensed to Francois Botha for the PSG National Signage Rollout workspace.
 
 ## Stack
 
@@ -23,7 +23,7 @@ A secure, role-aware rollout management portal for tracking PSG signage projects
 
 ## Notes
 
-This portal includes a Supabase-backed dashboard, project workflows, project detail pages, reports, search, map, and user profile management.
+This platform includes a Supabase-backed dashboard, project workflows, project detail pages, reports, search, map, and user profile management.
 Project files upload to a private Supabase Storage bucket and are downloaded through short-lived signed links.
 
 ## Supabase Setup
@@ -44,7 +44,7 @@ For sign-in testing, create Supabase Auth users that match the seeded profile em
 
 The setup SQL also creates private Storage buckets:
 
-- `project-files` accepts PDF, Excel, Word, JPG, PNG, and WebP files up to 25 MB and stores project file metadata in the `projects.files` JSON field.
+- `project-files` accepts PDF, DOCX, XLSX, JPG, PNG, DWG, and AI files up to 25 MB and stores project file metadata in the `projects.files` JSON field.
 - `voice-updates` accepts M4A, MP3, WAV, OGG, WebM, AAC, and MP4 audio up to 50 MB for admin/head-office voice note transcription.
 
 ### RLS hardening

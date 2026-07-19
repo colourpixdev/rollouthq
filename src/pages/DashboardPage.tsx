@@ -5,6 +5,7 @@ import { TaskList } from '../components/dashboard/TaskList';
 import { getProjects } from '../services/portalService';
 import { useAuth } from '../contexts/AuthContext';
 import { filterProjectsForUser } from '../utils/permissions';
+import { productBrand } from '../constants/branding';
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -26,10 +27,10 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(14,165,233,0.18),rgba(2,6,23,0.65))] p-6 shadow-soft">
-        <p className="text-sm uppercase tracking-[0.32em] text-sky-200/80">PSG Rollout Dashboard</p>
-        <h2 className="mt-3 text-3xl font-semibold text-white">Single source of truth for every signage project.</h2>
+        <p className="text-sm uppercase tracking-[0.32em] text-teal-200/80">{productBrand.workspace}</p>
+        <h2 className="mt-3 text-3xl font-semibold text-white">Enterprise workspace for every rollout project.</h2>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
-          Track quotations, approvals, installs, photos, comments, and signoff in one live workspace instead of swapping Excel sheets by email.
+          Track quotations, approvals, installs, photos, questions, files, and signoff in one live workspace instead of swapping spreadsheets by email.
         </p>
       </section>
 

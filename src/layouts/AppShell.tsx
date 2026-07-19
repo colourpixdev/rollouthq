@@ -1,9 +1,13 @@
 import type { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import { LogOut, Shield, Sparkles } from 'lucide-react';
+import { LogOut, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
+import { productBrand } from '../constants/branding';
+import { RolloutLogo } from '../components/brand/RolloutLogo';
+import { AppFooter } from '../components/brand/AppFooter';
+import { UserAgreementDialog } from '../components/brand/UserAgreementDialog';
 
 interface NavigationItem {
   to: string;
@@ -17,16 +21,20 @@ export function AppShell({ navigation, children, statusBanner }: { navigation: N
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,rgba(2,6,23,0.88),rgba(15,23,42,0.98))] text-slate-100">
+      <UserAgreementDialog user={user} />
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col lg:flex-row">
         <aside className="border-b border-white/10 bg-slate-950/70 p-5 backdrop-blur xl:w-72 lg:border-b-0 lg:border-r">
           <div className="mb-8 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/30">
-              <Sparkles className="h-6 w-6" />
-            </div>
+            <RolloutLogo />
             <div>
-              <p className="text-xs uppercase tracking-[0.32em] text-slate-400">PSG Rollout</p>
-              <h1 className="text-lg font-semibold">Signage Portal</h1>
+              <p className="text-xs uppercase tracking-[0.32em] text-teal-200/80">{productBrand.name}</p>
+              <h1 className="text-sm font-semibold leading-5 text-white">{productBrand.description}</h1>
             </div>
+          </div>
+
+          <div className="mb-6 rounded-2xl border border-teal-400/15 bg-teal-400/8 p-4 text-xs text-slate-300">
+            <p className="font-medium text-white">Licensed to {productBrand.licensee}</p>
+            <p className="mt-1 text-slate-400">{productBrand.workspace}</p>
           </div>
 
           <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -76,6 +84,7 @@ export function AppShell({ navigation, children, statusBanner }: { navigation: N
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 xl:px-10">
           {statusBanner}
           {children}
+          <AppFooter />
         </main>
       </div>
     </div>

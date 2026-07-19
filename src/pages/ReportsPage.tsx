@@ -264,7 +264,7 @@ export function ReportsPage() {
           </div>
           <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
             <p className="font-medium">{roleLabel}</p>
-            <p className="mt-1 text-sky-100/75">{user?.branch ? `${user.branch} scoped view` : 'Portal reporting view'}</p>
+            <p className="mt-1 text-sky-100/75">{user?.branch ? `${user.branch} scoped view` : 'Workspace reporting view'}</p>
           </div>
         </div>
       </section>
@@ -275,7 +275,7 @@ export function ReportsPage() {
             <Shield className="mt-1 h-5 w-5 text-emerald-300" />
             <div>
               <h3 className="text-lg font-semibold text-white">Useful reports for this role</h3>
-              <p className="mt-1 text-sm text-slate-400">Common PSG, Colourpix, and signage-company reporting pulls.</p>
+              <p className="mt-1 text-sm text-slate-400">Common client, licensee, and delivery-partner reporting pulls.</p>
             </div>
           </div>
           <div className="mt-4 grid gap-2 md:grid-cols-2">

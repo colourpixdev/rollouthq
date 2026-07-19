@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import type { Project } from '../../types/domain';
+import type { Project, UserRecord } from '../../types/domain';
 
 const statusTone: Record<Project['status'], string> = {
   completed: 'bg-emerald-400/15 text-emerald-200 ring-emerald-400/30',
@@ -10,7 +10,14 @@ const statusTone: Record<Project['status'], string> = {
   cancelled: 'bg-stone-400/15 text-stone-200 ring-stone-400/30',
 };
 
-export function ProjectCard({ project }: { project: Project }) {
+function isQuestionRequester(question: Project['comments'][number], user: UserRecord | null | undefined) {
+  return question.requesterEmail ? question.requesterEmail === user?.email : question.author === user?.name;
+}
+
+export function ProjectCard({ project, user }: { project: Project; user?: UserRecord | null }) {
+  const openQuestions = project.comments.filter((comment) => comment.kind === 'question' && comment.status !== 'answered').length;
+  const unreadAnswers = project.comments.filter((comment) => comment.kind === 'question' && comment.status === 'answered' && comment.unreadForRequester && isQuestionRequester(comment, user)).length;
+
   return (
     <Link
       to={`/projects/${project.id}`}
@@ -26,6 +33,13 @@ export function ProjectCard({ project }: { project: Project }) {
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusTone[project.status]}`}>{project.currentStage}</span>
       </div>
+
+      {openQuestions > 0 || unreadAnswers > 0 ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {unreadAnswers > 0 ? <span className="rounded-full border border-emerald-400/25 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-100">{unreadAnswers} new answer{unreadAnswers === 1 ? '' : 's'}</span> : null}
+          {openQuestions > 0 ? <span className="rounded-full border border-amber-400/25 bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-100">{openQuestions} open question{openQuestions === 1 ? '' : 's'}</span> : null}
+        </div>
+      ) : null}
 
       <div className="mt-4 grid gap-2 text-sm text-slate-300">
         <p>Manager: {project.manager}</p>

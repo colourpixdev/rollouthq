@@ -35,6 +35,8 @@ type VoiceSuggestion = {
   tasks: string;
 };
 
+type ReviewState = 'idle' | 'matches' | 'no_matches' | 'manual_added' | 'applying' | 'applied' | 'error';
+
 type SpeechRecognitionInstance = {
   continuous: boolean;
   interimResults: boolean;
@@ -48,6 +50,7 @@ type SpeechRecognitionInstance = {
 type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 
 const statusOptions: ProjectStatus[] = ['in_progress', 'awaiting_approval', 'delayed', 'on_hold', 'cancelled', 'completed'];
+const genericProjectWords = new Set(['psg', 'branch', 'office', 'wealth', 'insure', 'signage', 'project']);
 
 function progressForStage(stage: ProjectStage) {
   const index = timelineStages.indexOf(stage);
@@ -102,9 +105,9 @@ function matchConfidence(segment: string, project: Project) {
     return 0.92;
   }
 
-  const branchWords = normalise(project.branch).split(' ').filter((word) => word.length > 3);
+  const branchWords = normalise(project.branch).split(' ').filter((word) => word.length > 3 && !genericProjectWords.has(word));
   const matchedWords = branchWords.filter((word) => text.includes(word)).length;
-  if (branchWords.length > 0 && matchedWords >= Math.min(2, branchWords.length)) {
+  if (branchWords.length > 1 && matchedWords >= Math.min(2, branchWords.length)) {
     return 0.76;
   }
 
@@ -309,6 +312,7 @@ export function VoiceUpdatesPage() {
   const [appliedProjects, setAppliedProjects] = useState<AppliedProject[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [reviewState, setReviewState] = useState<ReviewState>('idle');
 
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
   function getCurrentTranscript() {
@@ -329,10 +333,15 @@ export function VoiceUpdatesPage() {
     const matches = matchProjects(projects, nextTranscript);
     setSuggestions(matches);
     setAppliedProjects([]);
+    setReviewState(matches.length > 0 ? 'matches' : 'no_matches');
     setNotice(matches.length > 0 ? `${matches.length} project update${matches.length === 1 ? '' : 's'} ready to review.` : 'No confident project matches found. Select the project below and add the update to the review queue.');
   }
 
   const transcribeMutation = useMutation({
+    onMutate: () => {
+      setReviewState('idle');
+      setNotice('Transcribing voice note. Keep this page open until the transcript appears.');
+    },
     mutationFn: async (file: File) => {
       const upload = await uploadVoiceUpdateAudio(file);
       return transcribeVoiceUpdateAudio(upload.path);
@@ -345,18 +354,27 @@ export function VoiceUpdatesPage() {
       } else {
         setSuggestions([]);
         setAppliedProjects([]);
+        setReviewState('idle');
         setNotice('Voice note transcribed. Projects are still loading; select Review transcript in a moment.');
       }
     },
+    onError: (error) => {
+      setReviewState('error');
+      setNotice(error instanceof Error ? error.message : 'Voice note transcription failed. Paste the transcript or try another file.');
+    },
   });
   const applyMutation = useMutation({
+    onMutate: () => {
+      setReviewState('applying');
+      setNotice(`Applying ${selectedSuggestions.length} selected voice update${selectedSuggestions.length === 1 ? '' : 's'}...`);
+    },
     mutationFn: async (approved: VoiceSuggestion[]) => {
       const updatedProjects: AppliedProject[] = [];
 
       for (const suggestion of approved) {
         const updatedProject = await applyProjectVoiceUpdate({
           projectId: suggestion.projectId,
-          actor: user?.name ?? 'Portal user',
+          actor: user?.name ?? 'Workspace user',
           currentStage: suggestion.currentStage,
           status: suggestion.status,
           progress: suggestion.progress,
@@ -379,10 +397,15 @@ export function VoiceUpdatesPage() {
       setNotice(`${updatedProjects.length} voice update${updatedProjects.length === 1 ? '' : 's'} applied. Open the project link below to confirm the change.`);
       setSuggestions([]);
       setAppliedProjects(updatedProjects);
+      setReviewState('applied');
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['projects'] }),
         queryClient.invalidateQueries({ queryKey: ['portal-summary'] }),
       ]);
+    },
+    onError: (error) => {
+      setReviewState('error');
+      setNotice(error instanceof Error ? error.message : 'Unable to apply the selected voice updates. Review the queue and try again.');
     },
   });
 
@@ -428,6 +451,16 @@ export function VoiceUpdatesPage() {
 
     setSuggestions((current) => [suggestion, ...current]);
     setAppliedProjects([]);
+    setManualForm({
+      projectId: '',
+      currentStage: '',
+      status: '',
+      installationDate: '',
+      targetDate: '',
+      comment: '',
+      tasks: '',
+    });
+    setReviewState('manual_added');
     setNotice('Structured project update added to the review queue.');
   }
 
@@ -436,7 +469,10 @@ export function VoiceUpdatesPage() {
     setTranscript(nextTranscript);
     setSuggestions([]);
     setAppliedProjects([]);
+    setReviewState('idle');
     setNotice(null);
+    transcribeMutation.reset();
+    applyMutation.reset();
   }
 
   function startDictation() {
@@ -471,6 +507,21 @@ export function VoiceUpdatesPage() {
   }
 
   const selectedSuggestions = suggestions.filter((suggestion) => suggestion.selected);
+  const hasTranscript = Boolean(transcript.trim());
+  const canReviewTranscript = projects.length > 0 && hasTranscript && !transcribeMutation.isPending && !applyMutation.isPending;
+  const reviewStateMessage = reviewState === 'matches'
+    ? 'Detected updates are staged below. Check the project, stage, dates, comments, and tasks before saving.'
+    : reviewState === 'no_matches'
+      ? 'No project was confidently detected. Use the structured update form to choose the project yourself.'
+      : reviewState === 'manual_added'
+        ? 'A structured update is queued. Review it on the right, then submit the selected update.'
+        : reviewState === 'applying'
+          ? 'Saving selected updates to the project records. The queue stays visible if saving fails.'
+          : reviewState === 'applied'
+            ? 'Updates were saved. Use the project links below to confirm the result.'
+            : reviewState === 'error'
+              ? 'Something needs attention. The detailed message is shown below.'
+              : 'Paste a transcript, transcribe an audio file, or create a structured update to start a review queue.';
 
   return (
     <div className="space-y-6">
@@ -501,11 +552,11 @@ export function VoiceUpdatesPage() {
             <button
               type="button"
               onClick={analyseTranscript}
-              disabled={projects.length === 0}
+              disabled={!canReviewTranscript}
               className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Wand2 className="h-4 w-4" />
-              Send to review queue
+              Review transcript
             </button>
           </div>
 
@@ -550,12 +601,16 @@ export function VoiceUpdatesPage() {
             <button
               type="button"
               onClick={analyseTranscript}
-              disabled={projects.length === 0}
+              disabled={!canReviewTranscript}
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Wand2 className="h-4 w-4" />
-              Send to review queue
+              Review transcript
             </button>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-slate-300">
+            {reviewStateMessage}
           </div>
 
           <div className="mt-5 rounded-3xl border border-white/10 bg-white/5 p-4">

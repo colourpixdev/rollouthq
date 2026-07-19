@@ -1,12 +1,12 @@
 # Workspace Instructions
 
-This workspace contains a production-oriented scaffold for the PSG Signage Rollout Portal.
+This workspace contains a production-oriented scaffold for RolloutHQ™, an Enterprise Rollout Management Platform.
 
 ## Goals
 
-- Keep the portal secure, role-aware, and maintainable.
+- Keep the platform secure, role-aware, and maintainable.
 - Prefer small reusable components and typed domain models.
-- Preserve the rollout workflow, activity log, uploads, notifications, search, and reporting surfaces.
+- Preserve the rollout workflow, Project Journal, uploads, notifications, search, and reporting surfaces.
 - Use Supabase-ready abstractions for auth, database, storage, and realtime updates.
 
 ## Implementation Notes

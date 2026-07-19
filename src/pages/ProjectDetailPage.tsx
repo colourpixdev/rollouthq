@@ -4,10 +4,10 @@ import { useParams } from 'react-router-dom';
 import { FileGrid } from '../components/uploads/FileGrid';
 import { Timeline } from '../components/timeline/Timeline';
 import { timelineStages } from '../constants/portal';
-import { addProjectComment, addProjectTask, deleteProjectTask, getProjectById, getProjectFileUrl, updateProjectTask, updateProjectWorkflow, uploadProjectFile } from '../services/portalService';
+import { addProjectComment, addProjectTask, answerProjectQuestion, askProjectQuestion, deleteProjectTask, getProjectById, getProjectFileUrl, markProjectQuestionRead, updateProjectTask, updateProjectWorkflow, uploadProjectFile } from '../services/portalService';
 import { useAuth } from '../contexts/AuthContext';
-import { can, canViewProject } from '../utils/permissions';
-import type { Project, ProjectFile, ProjectStatus, ProjectStage, TaskItem } from '../types/domain';
+import { canViewProject, getAllowedStageOptions, getRolePolicy, getWorkflowDenialReason } from '../utils/permissions';
+import type { CommentItem, Project, ProjectFile, ProjectStatus, ProjectStage, TaskItem } from '../types/domain';
 
 const statusOptions: Array<{ value: ProjectStatus; label: string }> = [
   { value: 'in_progress', label: 'In progress' },
@@ -26,6 +26,15 @@ export function ProjectDetailPage() {
   const [status, setStatus] = useState<ProjectStatus>('in_progress');
   const [progress, setProgress] = useState(0);
   const [commentMessage, setCommentMessage] = useState('');
+  const [questionMessage, setQuestionMessage] = useState('');
+  const [questionStage, setQuestionStage] = useState<'' | ProjectStage>('');
+  const [answeringQuestionId, setAnsweringQuestionId] = useState<string | null>(null);
+  const [answerMessage, setAnswerMessage] = useState('');
+  const [answerStage, setAnswerStage] = useState<ProjectStage>('New Project');
+  const [answerStatus, setAnswerStatus] = useState<ProjectStatus>('in_progress');
+  const [answerProgress, setAnswerProgress] = useState(0);
+  const [answerTargetDate, setAnswerTargetDate] = useState('');
+  const [answerInstallationDate, setAnswerInstallationDate] = useState('');
   const [taskText, setTaskText] = useState('');
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskText, setEditingTaskText] = useState('');
@@ -57,7 +66,7 @@ export function ProjectDetailPage() {
       currentStage: stage,
       status,
       progress,
-      actor: user?.name ?? 'Portal user',
+      actor: user?.name ?? 'Workspace user',
     }),
     onSuccess: syncProject,
   });
@@ -65,7 +74,7 @@ export function ProjectDetailPage() {
   const commentMutation = useMutation({
     mutationFn: () => addProjectComment({
       projectId: projectId ?? '',
-      author: user?.name ?? 'Portal user',
+      author: user?.name ?? 'Workspace user',
       message: commentMessage,
     }),
     onSuccess: async (updatedProject) => {
@@ -74,11 +83,53 @@ export function ProjectDetailPage() {
     },
   });
 
+  const questionMutation = useMutation({
+    mutationFn: () => askProjectQuestion({
+      projectId: projectId ?? '',
+      author: user?.name ?? 'Workspace user',
+      authorEmail: user?.email ?? '',
+      message: questionMessage,
+      requestStage: questionStage || undefined,
+    }),
+    onSuccess: async (updatedProject) => {
+      setQuestionMessage('');
+      setQuestionStage('');
+      await syncProject(updatedProject);
+    },
+  });
+
+  const answerQuestionMutation = useMutation({
+    mutationFn: (question: CommentItem) => answerProjectQuestion({
+      projectId: projectId ?? '',
+      questionId: question.id ?? '',
+      actor: user?.name ?? 'Workspace user',
+      answer: answerMessage,
+      currentStage: answerStage,
+      status: answerStatus,
+      progress: answerProgress,
+      targetDate: answerTargetDate,
+      installationDate: answerInstallationDate,
+    }),
+    onSuccess: async (updatedProject) => {
+      setAnsweringQuestionId(null);
+      setAnswerMessage('');
+      await syncProject(updatedProject);
+    },
+  });
+
+  const readQuestionMutation = useMutation({
+    mutationFn: (question: CommentItem) => markProjectQuestionRead({
+      projectId: projectId ?? '',
+      questionId: question.id ?? '',
+    }),
+    onSuccess: syncProject,
+  });
+
   const taskMutation = useMutation({
     mutationFn: () => addProjectTask({
       projectId: projectId ?? '',
       task: taskText,
-      actor: user?.name ?? 'Portal user',
+      actor: user?.name ?? 'Workspace user',
     }),
     onSuccess: async (updatedProject) => {
       setTaskText('');
@@ -92,7 +143,7 @@ export function ProjectDetailPage() {
       taskId: task.id,
       text,
       completed,
-      actor: user?.name ?? 'Portal user',
+      actor: user?.name ?? 'Workspace user',
     }),
     onSuccess: async (updatedProject) => {
       setEditingTaskId(null);
@@ -105,7 +156,7 @@ export function ProjectDetailPage() {
     mutationFn: (task: TaskItem) => deleteProjectTask({
       projectId: projectId ?? '',
       taskId: task.id,
-      actor: user?.name ?? 'Portal user',
+      actor: user?.name ?? 'Workspace user',
     }),
     onSuccess: async (updatedProject) => {
       setEditingTaskId(null);
@@ -151,11 +202,25 @@ export function ProjectDetailPage() {
   });
 
   const fileError = uploadMutation.error ?? downloadMutation.error;
-  const workflowError = workflowMutation.error ?? commentMutation.error ?? taskMutation.error ?? updateTaskMutation.error ?? deleteTaskMutation.error;
-  const canManageWorkflow = can(user, 'manage_workflow');
-  const canUploadFiles = can(user, 'upload_files');
-  const canAddComments = can(user, 'add_comments');
-  const canAddTasks = can(user, 'add_tasks');
+  const workflowError = workflowMutation.error ?? commentMutation.error ?? questionMutation.error ?? answerQuestionMutation.error ?? readQuestionMutation.error ?? taskMutation.error ?? updateTaskMutation.error ?? deleteTaskMutation.error;
+  const rolePolicy = getRolePolicy(user);
+  const canUploadFiles = Boolean(rolePolicy?.files.canUploadFiles);
+  const canAddComments = Boolean(rolePolicy?.communication.canCreateComments);
+  const canAskColourpix = Boolean(rolePolicy?.communication.canAskQuestions);
+  const canAnswerColourpixQuestions = Boolean(rolePolicy?.communication.canAnswerQuestions);
+  const canAddTasks = Boolean(rolePolicy?.tasks.canCreateTasks);
+  const canCompleteTasks = Boolean(rolePolicy?.tasks.canCompleteTasks);
+  const canDeleteTasks = Boolean(rolePolicy?.tasks.canDeleteTasks);
+
+  function startAnswer(question: CommentItem) {
+    setAnsweringQuestionId(question.id ?? null);
+    setAnswerMessage(question.answer ?? '');
+    setAnswerStage(project?.currentStage ?? 'New Project');
+    setAnswerStatus(project?.status ?? 'in_progress');
+    setAnswerProgress(project?.progress ?? 0);
+    setAnswerTargetDate(project?.targetDate ?? '');
+    setAnswerInstallationDate(project?.installationDate ?? '');
+  }
 
   if (isLoading) {
     return <div className="rounded-[2rem] border border-white/10 bg-white/6 p-6 text-sm text-slate-300 shadow-soft">Loading project...</div>;
@@ -170,6 +235,15 @@ export function ProjectDetailPage() {
   }
 
   const selectedProject = project;
+  const projectQuestions = selectedProject.comments.filter((comment) => comment.kind === 'question');
+  const projectComments = selectedProject.comments.filter((comment) => comment.kind !== 'question');
+  const isQuestionRequester = (question: CommentItem) => (question.requesterEmail ? question.requesterEmail === user?.email : question.author === user?.name);
+  const unreadAnswers = projectQuestions.filter((question) => question.status === 'answered' && question.unreadForRequester && isQuestionRequester(question));
+  const allowedStageOptions = getAllowedStageOptions(user, selectedProject, timelineStages);
+  const hasAllowedStageChange = allowedStageOptions.some((item) => item !== selectedProject.currentStage);
+  const workflowDenialReason = getWorkflowDenialReason(user, selectedProject, { currentStage: stage, status, progress });
+  const hasWorkflowChange = stage !== selectedProject.currentStage || status !== selectedProject.status || progress !== selectedProject.progress;
+  const canSubmitWorkflow = hasWorkflowChange && !workflowDenialReason;
 
   return (
     <div className="space-y-6">
@@ -189,37 +263,162 @@ export function ProjectDetailPage() {
 
       <Timeline stages={timelineStages} activeStage={selectedProject.currentStage} />
 
+      <section className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Project Questions</h3>
+            <p className="mt-1 text-sm text-slate-400">PSG can request a stage update here. Colourpix can answer and update project details in the same response.</p>
+          </div>
+          {unreadAnswers.length > 0 ? <span className="rounded-full border border-emerald-400/25 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-100">{unreadAnswers.length} new answer{unreadAnswers.length === 1 ? '' : 's'}</span> : null}
+        </div>
+
+        {canAskColourpix ? (
+          <div className="mt-5 grid gap-3 rounded-2xl border border-sky-400/15 bg-sky-500/10 p-4">
+            <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+              <label className="grid gap-2 text-sm text-slate-300">
+                Question for Colourpix
+                <textarea value={questionMessage} onChange={(event) => setQuestionMessage(event.target.value)} rows={3} placeholder="Please confirm whether artwork approval is still blocking this stage." className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400/50" />
+              </label>
+              <label className="grid content-start gap-2 text-sm text-slate-300">
+                Related stage
+                <select value={questionStage} onChange={(event) => setQuestionStage(event.target.value as '' | ProjectStage)} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50">
+                  <option value="">General update</option>
+                  {timelineStages.map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
+              </label>
+            </div>
+            <button type="button" disabled={questionMutation.isPending || !questionMessage.trim()} onClick={() => questionMutation.mutate()} className="w-fit rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50">
+              {questionMutation.isPending ? 'Sending question...' : 'Send question'}
+            </button>
+          </div>
+        ) : null}
+
+        <div className="mt-5 space-y-4">
+          {projectQuestions.length > 0 ? projectQuestions.map((question) => {
+            const questionId = question.id ?? `${question.author}-${question.requestedAt ?? question.date}`;
+            const isRequester = isQuestionRequester(question);
+            const showAnswerForm = canAnswerColourpixQuestions && answeringQuestionId === question.id;
+
+            return (
+              <article key={questionId} className={`rounded-2xl border p-4 ${question.status === 'answered' ? 'border-emerald-400/20 bg-emerald-500/10' : 'border-amber-400/20 bg-amber-500/10'}`}>
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-white">{question.author}</p>
+                      <span className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-xs text-slate-200">{question.status === 'answered' ? 'Answered' : 'Awaiting Colourpix'}</span>
+                      {question.requestStage ? <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-xs text-sky-100">{question.requestStage}</span> : null}
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-200">{question.message}</p>
+                    <p className="mt-2 text-xs text-slate-500">Asked {question.date}</p>
+                  </div>
+                  {question.status === 'answered' && question.unreadForRequester && isRequester ? (
+                    <button type="button" disabled={readQuestionMutation.isPending} onClick={() => readQuestionMutation.mutate(question)} className="rounded-xl border border-emerald-300/30 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50">
+                      Mark answer read
+                    </button>
+                  ) : null}
+                </div>
+
+                {question.answer || question.relatedChanges?.length ? (
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                      <span className="font-semibold text-emerald-100">{question.answeredBy ?? 'Colourpix'}</span>
+                      {question.answeredAt ? <span>{new Date(question.answeredAt).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })}</span> : null}
+                    </div>
+                    {question.answer ? <p className="mt-2 text-sm leading-6 text-slate-200">{question.answer}</p> : null}
+                    {question.relatedChanges?.length ? (
+                      <ul className="mt-3 grid gap-1 text-xs text-emerald-100">
+                        {question.relatedChanges.map((change) => <li key={change}>{change}</li>)}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {canAnswerColourpixQuestions ? (
+                  <div className="mt-4">
+                    {showAnswerForm ? (
+                      <div className="grid gap-4 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                        <label className="grid gap-2 text-sm text-slate-300">
+                          Answer
+                          <textarea value={answerMessage} onChange={(event) => setAnswerMessage(event.target.value)} rows={3} placeholder="Share the latest update for PSG." className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400/50" />
+                        </label>
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          <label className="grid gap-2 text-sm text-slate-300">
+                            Answer stage
+                            <select value={answerStage} onChange={(event) => setAnswerStage(event.target.value as ProjectStage)} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50">
+                              {timelineStages.map((item) => <option key={item} value={item}>{item}</option>)}
+                            </select>
+                          </label>
+                          <label className="grid gap-2 text-sm text-slate-300">
+                            Answer status
+                            <select value={answerStatus} onChange={(event) => setAnswerStatus(event.target.value as ProjectStatus)} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50">
+                              {statusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                            </select>
+                          </label>
+                          <label className="grid gap-2 text-sm text-slate-300">
+                            Answer progress
+                            <input type="number" min="0" max="100" value={answerProgress} onChange={(event) => setAnswerProgress(Number(event.target.value))} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50" />
+                          </label>
+                          <label className="grid gap-2 text-sm text-slate-300">
+                            Target date
+                            <input value={answerTargetDate} onChange={(event) => setAnswerTargetDate(event.target.value)} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50" />
+                          </label>
+                          <label className="grid gap-2 text-sm text-slate-300">
+                            Installation date
+                            <input value={answerInstallationDate} onChange={(event) => setAnswerInstallationDate(event.target.value)} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50" />
+                          </label>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" disabled={answerQuestionMutation.isPending || (!answerMessage.trim() && answerStage === selectedProject.currentStage && answerStatus === selectedProject.status && answerProgress === selectedProject.progress && answerTargetDate === selectedProject.targetDate && answerInstallationDate === selectedProject.installationDate)} onClick={() => answerQuestionMutation.mutate(question)} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50">
+                            {answerQuestionMutation.isPending ? 'Sending answer...' : 'Answer and update'}
+                          </button>
+                          <button type="button" onClick={() => setAnsweringQuestionId(null)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/10">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => startAnswer(question)} className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/20">
+                        {question.status === 'answered' ? 'Update answer' : 'Answer request'}
+                      </button>
+                    )}
+                  </div>
+                ) : null}
+              </article>
+            );
+          }) : <p className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-4 text-sm text-slate-400">No project questions yet.</p>}
+        </div>
+      </section>
+
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft">
           <h3 className="text-lg font-semibold text-white">Workflow Actions</h3>
           <p className="mt-1 text-sm text-slate-400">Update the stage, status, and progress while keeping an activity trail.</p>
-          {!canManageWorkflow ? <p className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">Your role can view this workflow but cannot update it.</p> : null}
+          {!rolePolicy?.workflow.canChangeStage && !rolePolicy?.workflow.canChangeStatus && !rolePolicy?.workflow.canChangeProgress ? <p className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">Your role can view this workflow but cannot update it.</p> : null}
 
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             <label className="grid gap-2 text-sm text-slate-300 md:col-span-2">
               Stage
-              <select value={stage} disabled={!canManageWorkflow} onChange={(event) => setStage(event.target.value as ProjectStage)} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50 disabled:cursor-not-allowed disabled:opacity-60">
-                {timelineStages.map((item) => <option key={item} value={item}>{item}</option>)}
+              <select value={stage} disabled={!rolePolicy?.workflow.canChangeStage || !hasAllowedStageChange} onChange={(event) => setStage(event.target.value as ProjectStage)} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50 disabled:cursor-not-allowed disabled:opacity-60">
+                {allowedStageOptions.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
             </label>
 
             <label className="grid gap-2 text-sm text-slate-300">
               Status
-              <select value={status} disabled={!canManageWorkflow} onChange={(event) => setStatus(event.target.value as ProjectStatus)} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50 disabled:cursor-not-allowed disabled:opacity-60">
+              <select value={status} disabled={!rolePolicy?.workflow.canChangeStatus} onChange={(event) => setStatus(event.target.value as ProjectStatus)} className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none focus:border-sky-400/50 disabled:cursor-not-allowed disabled:opacity-60">
                 {statusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </label>
 
             <label className="grid gap-2 text-sm text-slate-300 md:col-span-2">
               Progress
-              <input type="range" min="0" max="100" value={progress} disabled={!canManageWorkflow} onChange={(event) => setProgress(Number(event.target.value))} className="accent-sky-400 disabled:cursor-not-allowed disabled:opacity-60" />
+              <input type="range" min="0" max="100" value={progress} disabled={!rolePolicy?.workflow.canChangeProgress} onChange={(event) => setProgress(Number(event.target.value))} className="accent-sky-400 disabled:cursor-not-allowed disabled:opacity-60" />
             </label>
             <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white">{progress}% complete</div>
           </div>
 
           {workflowError instanceof Error ? <p className="mt-4 text-sm text-red-300">{workflowError.message}</p> : null}
+          {workflowDenialReason && hasWorkflowChange ? <p className="mt-4 text-sm text-amber-200">{workflowDenialReason}</p> : null}
 
-          <button type="button" disabled={!canManageWorkflow || workflowMutation.isPending} onClick={() => workflowMutation.mutate()} className="mt-5 rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60">
+          <button type="button" disabled={!canSubmitWorkflow || workflowMutation.isPending} onClick={() => workflowMutation.mutate()} className="mt-5 rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60">
             {workflowMutation.isPending ? 'Updating workflow...' : 'Update workflow'}
           </button>
         </div>
@@ -246,13 +445,13 @@ export function ProjectDetailPage() {
                 ) : (
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <label className="flex min-w-0 flex-1 items-start gap-3">
-                      <input type="checkbox" checked={task.completed} disabled={!canAddTasks || updateTaskMutation.isPending} onChange={(event) => updateTaskMutation.mutate({ task, completed: event.target.checked })} className="mt-1 h-4 w-4 rounded border-white/20 bg-slate-900 accent-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" />
+                      <input type="checkbox" checked={task.completed} disabled={!canCompleteTasks || updateTaskMutation.isPending} onChange={(event) => updateTaskMutation.mutate({ task, completed: event.target.checked })} className="mt-1 h-4 w-4 rounded border-white/20 bg-slate-900 accent-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" />
                       <span className={task.completed ? 'text-slate-500 line-through' : 'text-slate-200'}>{task.text}</span>
                     </label>
-                    {canAddTasks ? (
+                    {canAddTasks || canDeleteTasks ? (
                       <div className="flex shrink-0 gap-2">
-                        <button type="button" onClick={() => { setEditingTaskId(task.id); setEditingTaskText(task.text); }} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10">Edit</button>
-                        <button type="button" disabled={deleteTaskMutation.isPending} onClick={() => deleteTaskMutation.mutate(task)} className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50">Delete</button>
+                        {canAddTasks ? <button type="button" onClick={() => { setEditingTaskId(task.id); setEditingTaskText(task.text); }} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10">Edit</button> : null}
+                        {canDeleteTasks ? <button type="button" disabled={deleteTaskMutation.isPending} onClick={() => deleteTaskMutation.mutate(task)} className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50">Delete</button> : null}
                       </div>
                     ) : null}
                   </div>
@@ -278,10 +477,10 @@ export function ProjectDetailPage() {
             <p className="mt-4 text-sm leading-6 text-slate-300">{selectedProject.notes}</p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft">
-            <h3 className="text-lg font-semibold text-white">Project Activity</h3>
+            <h3 className="text-lg font-semibold text-white">Project Journal</h3>
             <div className="mt-4 space-y-3">
-              {selectedProject.activity.length > 0 ? selectedProject.activity.map((item) => (
-                <div key={`${item.date}-${item.title}-${item.detail}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+              {selectedProject.activity.length > 0 ? selectedProject.activity.map((item, index) => (
+                <div key={`${item.date}-${item.title}-${item.detail}-${index}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-sm font-medium text-white">{item.title}</p>
                     <p className="shrink-0 text-xs text-slate-500">{item.date}</p>
@@ -300,8 +499,8 @@ export function ProjectDetailPage() {
               </button>
             </div>
             <div className="mt-4 space-y-4">
-              {selectedProject.comments.map((comment) => (
-                <div key={`${comment.date}-${comment.author}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+              {projectComments.map((comment) => (
+                <div key={`${comment.date}-${comment.author}-${comment.message}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <p className="font-medium text-white">{comment.author}</p>
                     <p className="text-slate-500">{comment.date}</p>
@@ -309,6 +508,7 @@ export function ProjectDetailPage() {
                   <p className="mt-2 text-sm text-slate-300">{comment.message}</p>
                 </div>
               ))}
+              {projectComments.length === 0 ? <p className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-4 text-sm text-slate-400">No comments recorded yet.</p> : null}
             </div>
           </div>
         </div>

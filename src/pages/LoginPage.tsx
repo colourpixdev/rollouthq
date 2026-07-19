@@ -7,6 +7,8 @@ import { X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { roleLabels } from '../constants/portal';
 import type { Role } from '../types/domain';
+import { productBrand } from '../constants/branding';
+import { RolloutLogo } from '../components/brand/RolloutLogo';
 
 const roles: Role[] = ['colourpix_admin', 'psg_head_office', 'psg_branch_manager', 'sign_company'];
 
@@ -54,11 +56,25 @@ export function LoginPage() {
   return (
     <div className="grid min-h-[calc(100vh-3rem)] place-items-center px-4 py-8">
       <div className="w-full max-w-2xl rounded-[2rem] border border-white/10 bg-white/6 p-8 shadow-soft backdrop-blur-xl">
-        <p className="text-sm uppercase tracking-[0.3em] text-sky-300">Secure access</p>
-        <h2 className="mt-3 text-3xl font-semibold text-white">PSG Signage Rollout Portal</h2>
-        <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">
-          Sign in with your Supabase Auth account. Preview roles are available only in local development or when explicitly enabled.
-        </p>
+        <div className="flex items-start gap-4">
+          <RolloutLogo />
+          <div>
+            <p className="text-sm uppercase tracking-[0.3em] text-teal-300">Secure access</p>
+            <h2 className="mt-3 text-4xl font-semibold text-white">{productBrand.name}</h2>
+            <p className="mt-2 text-base text-slate-200">{productBrand.description}</p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-3 rounded-3xl border border-white/10 bg-slate-950/45 p-4 text-sm text-slate-300 md:grid-cols-2">
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Workspace</p>
+            <p className="mt-1 font-medium text-white">{productBrand.workspace}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Licensed To</p>
+            <p className="mt-1 font-medium text-white">{productBrand.licensee}</p>
+          </div>
+        </div>
 
         {enablePreviewAuth ? (
           <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
@@ -149,6 +165,13 @@ export function LoginPage() {
             ))}
           </div>
         ) : null}
+
+        <footer className="mt-8 border-t border-white/10 pt-5 text-xs text-slate-500">
+          <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
+            <span>{productBrand.poweredBy}</span>
+            <span>Copyright {productBrand.copyright}</span>
+          </div>
+        </footer>
       </div>
     </div>
   );

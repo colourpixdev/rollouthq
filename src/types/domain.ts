@@ -66,9 +66,20 @@ export interface TaskItem {
 }
 
 export interface CommentItem {
+  id?: string;
+  kind?: 'comment' | 'question';
   date: string;
   author: string;
   message: string;
+  status?: 'open' | 'answered';
+  requestStage?: ProjectStage;
+  requesterEmail?: string;
+  requestedAt?: string;
+  answer?: string;
+  answeredBy?: string;
+  answeredAt?: string;
+  unreadForRequester?: boolean;
+  relatedChanges?: string[];
 }
 
 export interface ActivityItem {

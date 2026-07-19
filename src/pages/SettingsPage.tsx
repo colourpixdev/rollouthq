@@ -23,8 +23,8 @@ export function SettingsPage() {
             <p className="text-sm uppercase tracking-[0.28em] text-sky-200">Authentication layer</p>
             <h3 className="mt-2 text-xl font-semibold text-white">{authMode}</h3>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Sign-in flows through Supabase Auth when environment keys are present, then resolves the user profile and portal role from the profiles table.
-              Without Supabase config, the portal keeps the local preview experience available for demos.
+              Sign-in flows through Supabase Auth when environment keys are present, then resolves the user profile and workspace role from the profiles table.
+              Without Supabase config, the platform keeps the local preview experience available for demos.
             </p>
           </div>
           <span className="inline-flex w-fit items-center gap-2 rounded-full border border-sky-300/25 bg-slate-950/40 px-3 py-1 text-sm font-medium text-sky-100">
@@ -42,7 +42,7 @@ export function SettingsPage() {
           <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4">
             <Database className="text-sky-200" width={22} height={22} />
             <p className="mt-3 text-sm font-semibold text-white">Profiles</p>
-            <p className="mt-1 text-sm leading-6 text-slate-400">Portal access is hydrated from name, email, branch, and role values in the Supabase profiles table.</p>
+            <p className="mt-1 text-sm leading-6 text-slate-400">Workspace access is hydrated from name, email, branch, and role values in the Supabase profiles table.</p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4">
             <CheckCircle2 className="text-sky-200" width={22} height={22} />

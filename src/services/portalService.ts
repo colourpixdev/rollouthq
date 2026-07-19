@@ -41,13 +41,20 @@ const maxProjectFileSize = 25 * 1024 * 1024;
 const maxVoiceUpdateSize = 50 * 1024 * 1024;
 const allowedProjectFileTypes = new Set([
   'application/pdf',
-  'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'image/jpeg',
   'image/png',
-  'image/webp',
+  'application/postscript',
+  'application/illustrator',
+  'application/dwg',
+  'application/x-dwg',
+  'application/acad',
+  'application/x-acad',
+  'application/autocad_dwg',
+  'drawing/x-dwg',
+  'image/vnd.dwg',
+  'image/x-dwg',
 ]);
 const allowedVoiceUpdateTypes = new Set([
   'audio/aac',
@@ -82,6 +89,10 @@ function normalizeProjectFiles(files: unknown[] | null): ProjectFile[] {
 
 function createTaskId() {
   return globalThis.crypto?.randomUUID?.() ?? `task-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createQuestionId() {
+  return globalThis.crypto?.randomUUID?.() ?? `question-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function taskSlug(value: string) {
@@ -134,7 +145,7 @@ function validateProjectFile(file: File) {
   }
 
   if (file.type && !allowedProjectFileTypes.has(file.type)) {
-    throw new Error('Unsupported file type. Upload PDF, Excel, Word, JPG, PNG, or WebP files.');
+    throw new Error('Unsupported file type. Upload PDF, DOCX, XLSX, JPG, PNG, DWG, or AI files.');
   }
 }
 
@@ -178,6 +189,32 @@ export type AddProjectCommentInput = {
   projectId: string;
   author: string;
   message: string;
+};
+
+export type AskProjectQuestionInput = {
+  projectId: string;
+  author: string;
+  authorEmail: string;
+  message: string;
+  requestStage?: Project['currentStage'];
+};
+
+export type AnswerProjectQuestionInput = {
+  projectId: string;
+  questionId: string;
+  actor: string;
+  answer?: string;
+  currentStage?: Project['currentStage'];
+  status?: Project['status'];
+  progress?: number;
+  targetDate?: string;
+  installationDate?: string;
+  completionDate?: string;
+};
+
+export type MarkProjectQuestionReadInput = {
+  projectId: string;
+  questionId: string;
 };
 
 export type AddProjectTaskInput = {
@@ -527,6 +564,170 @@ export async function addProjectComment(input: AddProjectCommentInput): Promise<
 
   if (error || !data) {
     throw error ?? new Error('Unable to add project comment.');
+  }
+
+  return mapProjectRow(data as ProjectRow);
+}
+
+export async function askProjectQuestion(input: AskProjectQuestionInput): Promise<Project> {
+  const client = supabase;
+
+  if (!client) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  const message = input.message.trim();
+  if (!message) {
+    throw new Error('Question cannot be empty.');
+  }
+
+  await hydrateAuthSession();
+
+  const existingProject = await getProjectById(input.projectId);
+  if (!existingProject) {
+    throw new Error('Project not found.');
+  }
+
+  const now = new Date().toISOString();
+  const comments: CommentItem[] = [
+    {
+      id: createQuestionId(),
+      kind: 'question',
+      date: todayLabel(),
+      author: input.author,
+      message,
+      status: 'open',
+      requestStage: input.requestStage,
+      requesterEmail: input.authorEmail,
+      requestedAt: now,
+      unreadForRequester: false,
+    },
+    ...existingProject.comments,
+  ];
+  const activity = [createActivity('Question raised', `${input.author} asked Colourpix for an update${input.requestStage ? ` on ${input.requestStage}` : ''}.`), ...existingProject.activity];
+
+  const { data, error } = await client
+    .from('projects')
+    .update({ comments, activity, updated_at: now })
+    .eq('id', input.projectId)
+    .select('*')
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error('Unable to send question.');
+  }
+
+  return mapProjectRow(data as ProjectRow);
+}
+
+export async function answerProjectQuestion(input: AnswerProjectQuestionInput): Promise<Project> {
+  const client = supabase;
+
+  if (!client) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  const answer = input.answer?.trim();
+
+  await hydrateAuthSession();
+
+  const existingProject = await getProjectById(input.projectId);
+  if (!existingProject) {
+    throw new Error('Project not found.');
+  }
+
+  const question = existingProject.comments.find((comment) => comment.id === input.questionId && comment.kind === 'question');
+  if (!question) {
+    throw new Error('Question not found.');
+  }
+
+  const relatedChanges = [
+    input.currentStage && input.currentStage !== existingProject.currentStage ? `Stage changed to ${input.currentStage}` : null,
+    input.status && input.status !== existingProject.status ? `Status changed to ${input.status.replace(/_/g, ' ')}` : null,
+    input.progress !== undefined && input.progress !== existingProject.progress ? `Progress changed to ${input.progress}%` : null,
+    input.installationDate && input.installationDate !== existingProject.installationDate ? `Installation date changed to ${input.installationDate}` : null,
+    input.targetDate && input.targetDate !== existingProject.targetDate ? `Target date changed to ${input.targetDate}` : null,
+    input.completionDate && input.completionDate !== existingProject.completionDate ? `Completion date changed to ${input.completionDate}` : null,
+  ].filter((change): change is string => Boolean(change));
+
+  if (!answer && relatedChanges.length === 0) {
+    throw new Error('Add an answer or make a project change before responding.');
+  }
+
+  const now = new Date().toISOString();
+  const comments = existingProject.comments.map((comment) => {
+    if (comment.id !== input.questionId) {
+      return comment;
+    }
+
+    return {
+      ...comment,
+      status: 'answered' as const,
+      answer: answer || comment.answer,
+      answeredBy: input.actor,
+      answeredAt: now,
+      unreadForRequester: true,
+      relatedChanges,
+    };
+  });
+  const activity = [
+    createActivity(
+      'Question answered',
+      `${input.actor} answered ${question.author}'s project question${relatedChanges.length > 0 ? ` and updated ${relatedChanges.join(', ').toLowerCase()}` : ''}.`,
+      relatedChanges.length > 0 ? 'success' : 'info',
+    ),
+    ...existingProject.activity,
+  ];
+
+  const { data, error } = await client
+    .from('projects')
+    .update({
+      current_stage: input.currentStage ?? existingProject.currentStage,
+      status: input.status ?? existingProject.status,
+      progress: input.progress ?? existingProject.progress,
+      target_date: input.targetDate ?? existingProject.targetDate,
+      installation_date: input.installationDate ?? existingProject.installationDate,
+      completion_date: input.completionDate ?? existingProject.completionDate,
+      comments,
+      activity,
+      updated_at: now,
+    })
+    .eq('id', input.projectId)
+    .select('*')
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error('Unable to answer question.');
+  }
+
+  return mapProjectRow(data as ProjectRow);
+}
+
+export async function markProjectQuestionRead(input: MarkProjectQuestionReadInput): Promise<Project> {
+  const client = supabase;
+
+  if (!client) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  await hydrateAuthSession();
+
+  const existingProject = await getProjectById(input.projectId);
+  if (!existingProject) {
+    throw new Error('Project not found.');
+  }
+
+  const comments = existingProject.comments.map((comment) => (comment.id === input.questionId && comment.kind === 'question' ? { ...comment, unreadForRequester: false } : comment));
+
+  const { data, error } = await client
+    .from('projects')
+    .update({ comments, updated_at: new Date().toISOString() })
+    .eq('id', input.projectId)
+    .select('*')
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error('Unable to mark question as read.');
   }
 
   return mapProjectRow(data as ProjectRow);

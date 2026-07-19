@@ -2,7 +2,7 @@
   "name": "rebrandreport",
   "private": true,
   "version": "0.0.0",
-  "description": "PSG Signage Rollout Portal with Supabase-backed workflows.",
+  "description": "RolloutHQ Enterprise Rollout Management Platform with Supabase-backed workflows.",
   "type": "module",
   "repository": {
     "type": "git",

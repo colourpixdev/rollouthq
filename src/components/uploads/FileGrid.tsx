@@ -41,7 +41,7 @@ export function FileGrid({
             <input
               type="file"
               disabled={isUploading}
-              accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp"
+              accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png,.dwg,.ai"
               className="sr-only"
               onChange={(event) => {
                 const file = event.target.files?.[0];

@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, KanbanSquare, FileText, Shield, Search, Users, MapPinned, Mic2 } from 'lucide-react';
+import { LayoutDashboard, KanbanSquare, FileText, Shield, Search, Users, MapPinned, Mic2, ShieldCheck } from 'lucide-react';
 import { AppShell } from './layouts/AppShell';
 import { LoginPage } from './pages/LoginPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { supabase } from './lib/supabase';
 import { canAccessRoute } from './utils/permissions';
+import { productBrand } from './constants/branding';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })));
 const MapPage = lazy(() => import('./pages/MapPage').then((module) => ({ default: module.MapPage })));
@@ -16,6 +17,8 @@ const SearchPage = lazy(() => import('./pages/SearchPage').then((module) => ({ d
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const UsersPage = lazy(() => import('./pages/UsersPage').then((module) => ({ default: module.UsersPage })));
 const VoiceUpdatesPage = lazy(() => import('./pages/VoiceUpdatesPage').then((module) => ({ default: module.VoiceUpdatesPage })));
+const AboutPage = lazy(() => import('./pages/AboutPage').then((module) => ({ default: module.AboutPage })));
+const LegalPage = lazy(() => import('./pages/LegalPage').then((module) => ({ default: module.LegalPage })));
 
 const navigation = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -26,7 +29,23 @@ const navigation = [
   { to: '/voice-updates', label: 'Voice Updates', icon: Mic2 },
   { to: '/users', label: 'Users', icon: Users },
   { to: '/settings', label: 'Settings', icon: Shield },
+  { to: '/about', label: 'About', icon: ShieldCheck },
+  { to: '/legal', label: 'Legal', icon: FileText },
 ];
+
+const routeTitles: Record<string, string> = {
+  '/': 'Dashboard',
+  '/projects': 'Projects',
+  '/reports': 'Reports',
+  '/users': 'Users',
+  '/settings': 'Settings',
+  '/search': 'Search',
+  '/map': 'Map',
+  '/voice-updates': 'Voice Updates',
+  '/about': 'About',
+  '/legal': 'Legal',
+  '/login': 'Sign in',
+};
 
 function RouteLoading() {
   return (
@@ -42,10 +61,16 @@ function AppRoutes() {
   const [supabaseStatus, setSupabaseStatus] = useState<string | null>(null);
 
   useEffect(() => {
+    const matchedRoute = location.pathname.startsWith('/projects/') ? '/projects' : location.pathname;
+    const pageTitle = routeTitles[matchedRoute] ?? productBrand.description;
+    document.title = `${pageTitle} | ${productBrand.name}`;
+  }, [location.pathname]);
+
+  useEffect(() => {
     let isMounted = true;
 
     if (!supabase) {
-      setSupabaseStatus('Supabase is not configured. Add your project URL and publishable key to load live portal data.');
+      setSupabaseStatus('Supabase is not configured. Add your project URL and publishable key to load live workspace data.');
       return () => {
         isMounted = false;
       };
@@ -136,6 +161,8 @@ function AppRoutes() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/voice-updates" element={<VoiceUpdatesPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/legal" element={<LegalPage />} />
         </Routes>
       </Suspense>
     </AppShell>

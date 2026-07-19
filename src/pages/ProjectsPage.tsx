@@ -4,7 +4,7 @@ import { KanbanBoard } from '../components/projects/KanbanBoard';
 import { getProjects, updateProjectWorkflow } from '../services/portalService';
 import { ProjectCreateForm } from '../components/projects/ProjectCreateForm';
 import { useAuth } from '../contexts/AuthContext';
-import { can, filterProjectsForUser } from '../utils/permissions';
+import { can, canChangeProjectStage, filterProjectsForUser } from '../utils/permissions';
 import { timelineStages } from '../constants/portal';
 import type { Project, ProjectStage, ProjectStatus } from '../types/domain';
 
@@ -42,13 +42,19 @@ export function ProjectsPage() {
   });
   const projects = filterProjectsForUser(data ?? [], user);
   const workflowMutation = useMutation({
-    mutationFn: ({ project, stage }: { project: Project; stage: ProjectStage }) => updateProjectWorkflow({
-      projectId: project.id,
-      currentStage: stage,
-      status: statusForStage(stage, project.status),
-      progress: progressForStage(stage),
-      actor: user?.name ?? 'Portal user',
-    }),
+    mutationFn: ({ project, stage }: { project: Project; stage: ProjectStage }) => {
+      if (!canChangeProjectStage(user, project, stage)) {
+        throw new Error('Your role cannot move this project to the selected stage.');
+      }
+
+      return updateProjectWorkflow({
+        projectId: project.id,
+        currentStage: stage,
+        status: statusForStage(stage, project.status),
+        progress: progressForStage(stage),
+        actor: user?.name ?? 'Workspace user',
+      });
+    },
     onSuccess: async (updatedProject) => {
       queryClient.setQueryData(['project', updatedProject.id], updatedProject);
       await Promise.all([
@@ -69,6 +75,7 @@ export function ProjectsPage() {
 
       <KanbanBoard
         projects={projects}
+        user={user}
         canMove={can(user, 'manage_workflow')}
         movingProjectId={workflowMutation.variables?.project.id ?? null}
         onMoveProject={(project, stage) => workflowMutation.mutate({ project, stage })}
@@ -78,7 +85,7 @@ export function ProjectsPage() {
 
       <section className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
         {projects.length > 0 ? projects.map((project) => (
-          <ProjectCard key={project.id} project={project} />
+          <ProjectCard key={project.id} project={project} user={user} />
         )) : (
           <div className="rounded-3xl border border-dashed border-white/15 bg-slate-950/40 p-6 text-sm text-slate-400 lg:col-span-2 2xl:col-span-3">
             No projects are available for your role.
