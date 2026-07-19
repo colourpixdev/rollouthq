@@ -79,11 +79,11 @@ export function KanbanBoard({
   onMoveProject?: (project: Project, stage: Project['currentStage']) => void;
 }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-6">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-3 2xl:grid-cols-6">
       {kanbanColumns.map((column) => {
         const matches = projects.filter((project) => columnMatch[column].includes(project.currentStage));
         return (
-          <section key={column} className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+          <section key={column} className="min-w-0 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">{column}</h3>
               <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-200">{matches.length}</span>

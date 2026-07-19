@@ -27,7 +27,7 @@ export function AppShell({ navigation, children, statusBanner }: { navigation: N
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,rgba(2,6,23,0.88),rgba(15,23,42,0.98))] text-slate-100">
       <UserAgreementDialog user={user} />
-      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col lg:flex-row">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1600px] min-w-0 flex-col lg:flex-row">
         <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/90 px-4 py-3 backdrop-blur lg:hidden">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
@@ -55,7 +55,7 @@ export function AppShell({ navigation, children, statusBanner }: { navigation: N
           </div>
         </header>
 
-        <aside className="hidden border-b border-white/10 bg-slate-950/70 p-5 backdrop-blur xl:w-72 lg:block lg:border-b-0 lg:border-r">
+        <aside className="hidden border-b border-white/10 bg-slate-950/70 p-5 backdrop-blur lg:block lg:w-72 lg:shrink-0 lg:border-b-0 lg:border-r">
           <div className="mb-8 flex items-center gap-3">
             <RolloutLogo />
             <div>
@@ -130,7 +130,7 @@ export function AppShell({ navigation, children, statusBanner }: { navigation: N
           </button>
         </aside>
 
-        <main className="flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:py-6 xl:px-10">
+        <main className="min-w-0 flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:py-6 xl:px-10">
           {statusBanner}
           {children}
           <AppFooter />

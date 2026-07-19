@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ClipboardCheck, Mic2, Wand2 } from 'lucide-react';
+import { ClipboardCheck, Mic2, Pause, Play, Send, Wand2 } from 'lucide-react';
 import { applyProjectVoiceUpdate, getProjects, transcribeVoiceUpdateAudio, uploadVoiceUpdateAudio } from '../services/portalService';
 import { timelineStages } from '../constants/portal';
 import { useAuth } from '../contexts/AuthContext';
@@ -36,12 +36,14 @@ type VoiceSuggestion = {
 };
 
 type ReviewState = 'idle' | 'matches' | 'no_matches' | 'manual_added' | 'applying' | 'applied' | 'error';
+type RecordingStatus = 'idle' | 'recording' | 'paused';
 
 type SpeechRecognitionInstance = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
   start: () => void;
+  stop: () => void;
   onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
   onend: (() => void) | null;
   onerror: (() => void) | null;
@@ -305,6 +307,9 @@ export function VoiceUpdatesPage() {
   const queryClient = useQueryClient();
   const transcriptRef = useRef('');
   const transcriptInputRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const recordingStatusRef = useRef<RecordingStatus>('idle');
+  const shouldSubmitAfterRecognitionEndsRef = useRef(false);
   const [transcript, setTranscript] = useState('');
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [suggestions, setSuggestions] = useState<VoiceSuggestion[]>([]);
@@ -318,11 +323,16 @@ export function VoiceUpdatesPage() {
     tasks: '',
   });
   const [appliedProjects, setAppliedProjects] = useState<AppliedProject[]>([]);
-  const [isListening, setIsListening] = useState(false);
+  const [recordingStatus, setRecordingStatusState] = useState<RecordingStatus>('idle');
   const [notice, setNotice] = useState<string | null>(null);
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
 
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
+  function setRecordingStatus(nextStatus: RecordingStatus) {
+    recordingStatusRef.current = nextStatus;
+    setRecordingStatusState(nextStatus);
+  }
+
   function getCurrentTranscript() {
     return transcriptInputRef.current?.value ?? transcriptRef.current;
   }
@@ -484,6 +494,10 @@ export function VoiceUpdatesPage() {
   }
 
   function startDictation() {
+    if (recordingStatusRef.current === 'recording') {
+      return;
+    }
+
     const Recognition = ((globalThis as typeof globalThis & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).SpeechRecognition
       ?? (globalThis as typeof globalThis & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).webkitSpeechRecognition);
 
@@ -492,7 +506,9 @@ export function VoiceUpdatesPage() {
       return;
     }
 
+    shouldSubmitAfterRecognitionEndsRef.current = false;
     const recognition = new Recognition();
+    recognitionRef.current = recognition;
     recognition.continuous = true;
     recognition.interimResults = false;
     recognition.lang = 'en-ZA';
@@ -504,10 +520,52 @@ export function VoiceUpdatesPage() {
         return nextTranscript;
       });
     };
-    recognition.onend = () => setIsListening(false);
-    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      if (shouldSubmitAfterRecognitionEndsRef.current) {
+        shouldSubmitAfterRecognitionEndsRef.current = false;
+        reviewTranscript();
+        return;
+      }
+
+      if (recordingStatusRef.current === 'recording') {
+        setRecordingStatus('paused');
+      }
+    };
+    recognition.onerror = () => {
+      recognitionRef.current = null;
+      shouldSubmitAfterRecognitionEndsRef.current = false;
+      setRecordingStatus('paused');
+      setNotice('Recording paused after a browser dictation error. You can continue recording or submit the transcript.');
+    };
     recognition.start();
-    setIsListening(true);
+    setRecordingStatus('recording');
+    setNotice(recordingStatus === 'paused' ? 'Recording resumed. Submit when you are ready to review.' : 'Recording started. Pause or submit when you are ready.');
+  }
+
+  function pauseDictation() {
+    if (recordingStatusRef.current !== 'recording') {
+      return;
+    }
+
+    shouldSubmitAfterRecognitionEndsRef.current = false;
+    setRecordingStatus('paused');
+    recognitionRef.current?.stop();
+    setNotice('Recording paused. Continue recording or submit the transcript when you are ready.');
+  }
+
+  function submitRecording() {
+    shouldSubmitAfterRecognitionEndsRef.current = true;
+    setRecordingStatus('idle');
+
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setNotice('Recording stopped. Preparing the transcript for review.');
+      return;
+    }
+
+    shouldSubmitAfterRecognitionEndsRef.current = false;
+    reviewTranscript();
   }
 
   function appendTranscriptSnippet(snippet: string) {
@@ -523,6 +581,9 @@ export function VoiceUpdatesPage() {
 
   const selectedSuggestions = suggestions.filter((suggestion) => suggestion.selected);
   const hasTranscript = Boolean(transcript.trim());
+  const isRecording = recordingStatus === 'recording';
+  const isRecordingPaused = recordingStatus === 'paused';
+  const hasRecordingSession = isRecording || isRecordingPaused;
   const canReviewTranscript = projects.length > 0 && hasTranscript && !transcribeMutation.isPending && !applyMutation.isPending;
   const selectedCountLabel = `${selectedSuggestions.length} selected`;
   const reviewStateMessage = reviewState === 'matches'
@@ -572,15 +633,33 @@ export function VoiceUpdatesPage() {
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <div className="rounded-[2rem] border border-white/10 bg-slate-950/55 p-4 shadow-soft sm:p-5">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <button
               type="button"
               onClick={startDictation}
-              disabled={isListening}
+              disabled={isRecording}
               className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Mic2 className="h-4 w-4" />
-              {isListening ? 'Listening...' : 'Start dictation'}
+              {isRecordingPaused ? <Play className="h-4 w-4" /> : <Mic2 className="h-4 w-4" />}
+              {isRecording ? 'Listening...' : isRecordingPaused ? 'Continue recording' : 'Start dictation'}
+            </button>
+            <button
+              type="button"
+              onClick={pauseDictation}
+              disabled={!isRecording}
+              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-amber-300/25 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Pause className="h-4 w-4" />
+              Pause
+            </button>
+            <button
+              type="button"
+              onClick={submitRecording}
+              disabled={!hasRecordingSession && !hasTranscript}
+              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Send className="h-4 w-4" />
+              Submit recording
             </button>
             <button
               type="button"

@@ -13,6 +13,9 @@ declare module 'lucide-react' {
   export const Mic2: LucideIcon;
   export const Wand2: LucideIcon;
   export const ClipboardCheck: LucideIcon;
+  export const Pause: LucideIcon;
+  export const Play: LucideIcon;
+  export const Send: LucideIcon;
   export const LogOut: LucideIcon;
   export const Sparkles: LucideIcon;
   export const X: LucideIcon;
