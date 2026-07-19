@@ -1,6 +1,6 @@
 # RolloutHQ™
 
-Enterprise Rollout Management Platform licensed to Francois Botha for the PSG National Signage Rollout workspace.
+Configurable project workspace platform for managed client delivery, rollout operations, requests, reports, and support workflows.
 
 ## Stack
 
@@ -20,11 +20,14 @@ Enterprise Rollout Management Platform licensed to Francois Botha for the PSG Na
 - `npm run build`
 - `npm run check`
 - `npm run preview`
+- `npm run website:preview`
 
 ## Notes
 
 This platform includes a Supabase-backed dashboard, project workflows, project detail pages, reports, search, map, and user profile management.
 Project files upload to a private Supabase Storage bucket and are downloaded through short-lived signed links.
+
+The public marketing and sales site lives in [website](website). It is separate from the authenticated workspace app: the website handles business intake, project enquiries, workspace requests, demos, and customisation requests; the app remains the invitation-only workspace instance for active client work.
 
 ## Supabase Setup
 

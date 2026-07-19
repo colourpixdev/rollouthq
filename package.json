@@ -16,6 +16,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build && node scripts/prepare-pages.mjs",
     "preview": "vite preview",
+    "website:preview": "npx serve website -l 4180",
     "check": "tsc -b --pretty false",
     "seed:auth": "node scripts/seed-auth.mjs",
     "seed:profiles": "node scripts/seed-profiles.mjs",
