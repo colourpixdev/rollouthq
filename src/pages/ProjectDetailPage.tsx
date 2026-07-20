@@ -20,15 +20,17 @@ const statusOptions: Array<{ value: ProjectStatus; label: string }> = [
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
-const projectSectionLinks = [
-  { number: '01', label: 'Timeline', href: '#timeline' },
-  { number: '02', label: 'Questions and update requests', href: '#questions' },
-  { number: '03', label: 'Workflow Actions', href: '#workflow-actions' },
-  { number: '04', label: 'Tasks', href: '#tasks' },
-  { number: '05', label: 'Files', href: '#files' },
-  { number: '06', label: 'Notes', href: '#notes' },
-  { number: '07', label: 'Project Journal', href: '#project-journal' },
-  { number: '08', label: 'Project update history', href: '#project-update-history' },
+type ProjectSectionId = 'timeline' | 'questions' | 'workflow-actions' | 'tasks' | 'files' | 'notes' | 'project-journal' | 'project-update-history';
+
+const projectSections: Array<{ id: ProjectSectionId; number: string; label: string }> = [
+  { id: 'timeline', number: '01', label: 'Timeline' },
+  { id: 'questions', number: '02', label: 'Questions and update requests' },
+  { id: 'workflow-actions', number: '03', label: 'Workflow Actions' },
+  { id: 'tasks', number: '04', label: 'Tasks' },
+  { id: 'files', number: '05', label: 'Files' },
+  { id: 'notes', number: '06', label: 'Notes' },
+  { id: 'project-journal', number: '07', label: 'Project Journal' },
+  { id: 'project-update-history', number: '08', label: 'Project update history' },
 ];
 
 function calculateTimelineWorkflow(project: Project, changedStage: ProjectStage, completed: boolean) {
@@ -70,6 +72,7 @@ export function ProjectDetailPage() {
   const [stage, setStage] = useState<ProjectStage>('New Project');
   const [status, setStatus] = useState<ProjectStatus>('in_progress');
   const [progress, setProgress] = useState(0);
+  const [activeProjectSection, setActiveProjectSection] = useState<ProjectSectionId>('timeline');
   const [commentMessage, setCommentMessage] = useState('');
   const [notesDraft, setNotesDraft] = useState('');
   const [questionMessage, setQuestionMessage] = useState('');
@@ -392,20 +395,29 @@ export function ProjectDetailPage() {
         </div>
       </section>
 
-      <section className="sticky top-4 z-20 rounded-[2rem] border border-white/10 bg-slate-950/92 p-4 shadow-soft backdrop-blur scroll-mt-24">
+      <section className="rounded-[2rem] border border-white/10 bg-slate-950/75 p-4 shadow-soft">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-teal-200/80">Project menu</p>
-            <h3 className="mt-1 text-lg font-semibold text-white">Jump to a workspace block</h3>
+            <h3 className="mt-1 text-lg font-semibold text-white">Choose a workspace block</h3>
           </div>
           <Link to="/projects" className="text-sm font-semibold text-sky-200 transition hover:text-sky-100">Back to projects</Link>
         </div>
-        <nav className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {projectSectionLinks.map((item) => (
-            <a key={item.href} href={item.href} className="group grid min-h-20 rounded-2xl border border-white/10 bg-white/5 p-3 transition hover:border-sky-300/35 hover:bg-sky-500/10">
-              <span className="text-xs font-semibold text-sky-200">#{item.number}</span>
-              <span className="mt-2 text-sm font-semibold leading-5 text-white group-hover:text-sky-100">{item.label}</span>
-            </a>
+        <nav className="mt-4 flex flex-wrap gap-2">
+          {projectSections.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveProjectSection(item.id)}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-2xl border px-3 py-2 text-left text-sm font-semibold transition sm:px-4 ${
+                activeProjectSection === item.id
+                  ? 'border-sky-300/40 bg-sky-500/15 text-sky-100'
+                  : 'border-white/10 bg-white/5 text-slate-300 hover:border-sky-300/30 hover:bg-sky-500/10 hover:text-white'
+              }`}
+            >
+              <span className="text-xs text-sky-200">#{item.number}</span>
+              <span>{item.label}</span>
+            </button>
           ))}
         </nav>
       </section>
@@ -431,7 +443,7 @@ export function ProjectDetailPage() {
         </div>
       </section>
 
-      <section id="timeline" className="scroll-mt-40">
+      <section className={activeProjectSection === 'timeline' ? '' : 'hidden'}>
         <Timeline
           stages={timelineStages}
           activeStage={selectedProject.currentStage}
@@ -445,7 +457,7 @@ export function ProjectDetailPage() {
         />
       </section>
 
-      <section id="questions" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
+      <section className={activeProjectSection === 'questions' ? 'rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft' : 'hidden'}>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-white">Questions and update requests</h3>
@@ -569,7 +581,7 @@ export function ProjectDetailPage() {
         </div>
       </section>
 
-      <section id="workflow-actions" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
+      <section className={activeProjectSection === 'workflow-actions' ? 'rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft' : 'hidden'}>
           <h3 className="text-lg font-semibold text-white">Workflow Actions</h3>
           <p className="mt-1 text-sm text-slate-400">Francois administers project detail changes. Other users should leave text updates at the top of this page.</p>
           {!canAdministerProjectDetails ? <p className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">Direct project detail editing is restricted. Leave an update above for Francois to review.</p> : null}
@@ -604,7 +616,7 @@ export function ProjectDetailPage() {
           </button>
       </section>
 
-      <section id="tasks" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
+      <section className={activeProjectSection === 'tasks' ? 'rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft' : 'hidden'}>
           <h3 className="text-lg font-semibold text-white">Tasks</h3>
           <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_14rem_auto]">
             <input value={taskText} disabled={!canAddTasks} onChange={(event) => setTaskText(event.target.value)} placeholder={canAddTasks ? 'Add next action...' : 'Task updates restricted'} className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400/50 disabled:cursor-not-allowed disabled:opacity-60" />
@@ -653,7 +665,7 @@ export function ProjectDetailPage() {
           </div>
       </section>
 
-      <section id="files" className="scroll-mt-40">
+      <section className={activeProjectSection === 'files' ? '' : 'hidden'}>
         <FileGrid
           files={selectedProject.files}
           isUploading={uploadMutation.isPending || previewMutation.isPending || downloadMutation.isPending}
@@ -666,7 +678,7 @@ export function ProjectDetailPage() {
         />
       </section>
 
-      <section id="notes" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
+      <section className={activeProjectSection === 'notes' ? 'rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft' : 'hidden'}>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-white">Notes</h3>
@@ -680,7 +692,7 @@ export function ProjectDetailPage() {
         {notesError instanceof Error ? <p className="mt-3 text-sm text-red-300">{notesError.message}</p> : null}
       </section>
 
-      <section id="project-journal" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
+      <section className={activeProjectSection === 'project-journal' ? 'rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft' : 'hidden'}>
         <h3 className="text-lg font-semibold text-white">Project Journal</h3>
         <div className="mt-4 space-y-3">
           {selectedProject.activity.length > 0 ? selectedProject.activity.map((item, index) => (
@@ -695,7 +707,7 @@ export function ProjectDetailPage() {
         </div>
       </section>
 
-      <section id="project-update-history" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
+      <section className={activeProjectSection === 'project-update-history' ? 'rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft' : 'hidden'}>
         <h3 className="text-lg font-semibold text-white">Project update history</h3>
         <p className="mt-1 text-sm text-slate-400">Updates left for Francois appear here after they are saved.</p>
         <div className="mt-4 space-y-4">
