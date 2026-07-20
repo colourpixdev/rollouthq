@@ -2,10 +2,11 @@ import type { UserRecord, Workspace } from '../types/domain';
 
 export const defaultGraphicsPartner = 'Colourpix (Pty) Ltd';
 export const platformOwnerEmail = ['francois', 'colourpix.co.za'].join('@');
+export const platformOwnerEmails = [platformOwnerEmail, 'bd@colourpix.co.za'];
 const privateRolloutInboxUser = ['francois2', 'botha'].join('');
 const privateRolloutInboxDomain = 'gmail.com';
 export const privateRolloutRequestInbox = `${privateRolloutInboxUser}@${privateRolloutInboxDomain}`;
-export const allWorkspaceAdminEmails = [platformOwnerEmail, 'beverley@colourpix.co.za'];
+export const allWorkspaceAdminEmails = platformOwnerEmails;
 
 export const workspaceAdminContact = {
   name: 'Workspace administrator',
@@ -45,6 +46,6 @@ export function enrichWorkspaceAccess(user: UserRecord): UserRecord {
     company: user.company ?? (user.role === 'sign_company' ? user.branch : undefined),
     workspaceIds: canAccessAllWorkspaces ? ['*'] : user.workspaceIds ?? [defaultWorkspace.id],
     canAccessAllWorkspaces,
-    isPlatformOwner: normalizedEmail === platformOwnerEmail,
+    isPlatformOwner: platformOwnerEmails.includes(normalizedEmail),
   };
 }
