@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import { FileText, LogOut, Shield } from 'lucide-react';
+import { FileText, LogOut, Search } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import { productBrand } from '../constants/branding';
-import { defaultWorkspace } from '../constants/workspaces';
 import { getInitials, getProfileIdentity } from '../utils/profileIdentity';
 import { RolloutLogo } from '../components/brand/RolloutLogo';
 import { AppFooter } from '../components/brand/AppFooter';
@@ -64,22 +63,15 @@ export function AppShell({ navigation, children, statusBanner }: { navigation: N
             </div>
           </div>
 
-          <div className="mb-6 rounded-2xl border border-teal-400/15 bg-teal-400/8 p-4 text-xs text-slate-300">
-            <p className="font-medium text-white">{productBrand.workspace}</p>
-            <p className="mt-1 text-slate-400">Managed by {productBrand.partner}</p>
-            <p className="mt-1 text-slate-500">Client context: {productBrand.customer}</p>
-            <p className="mt-1 text-slate-500">Projects, questions, voice notes, text updates, files, and completion history in one place.</p>
-            <div className="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/35 p-2">
-              <div className="grid h-9 w-9 place-items-center rounded-xl border border-sky-300/20 bg-sky-300/10 text-[0.68rem] font-semibold text-sky-100">{getInitials(defaultWorkspace.clientCompany)}</div>
-              <div className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-slate-950/70 p-1.5">
-                <div className="grid w-full gap-0.5">
-                  <span className="h-1 rounded-full bg-cyan-300" />
-                  <span className="h-1 rounded-full bg-fuchsia-300" />
-                  <span className="h-1 rounded-full bg-yellow-200" />
-                </div>
-              </div>
-              <span className="text-slate-500">workspace context</span>
-            </div>
+          <div className="mb-6 grid gap-2 rounded-2xl border border-teal-400/15 bg-teal-400/8 p-3 text-xs text-slate-300">
+            <Link to="/search" className="flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-3 py-2 font-semibold text-white transition hover:bg-sky-400">
+              <Search className="h-4 w-4" />
+              Search projects
+            </Link>
+            <Link to="/projects" className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 font-semibold text-slate-100 transition hover:bg-white/10">
+              <FileText className="h-4 w-4" />
+              Projects
+            </Link>
           </div>
 
           <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-4">

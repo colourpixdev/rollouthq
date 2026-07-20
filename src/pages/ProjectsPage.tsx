@@ -80,15 +80,13 @@ export function ProjectsPage() {
     <div className="space-y-6">
       <section className="rounded-[2rem] border border-white/10 bg-white/6 p-6 shadow-soft">
         <h2 className="text-2xl font-semibold text-white">Projects</h2>
-        <p className="mt-2 text-sm text-slate-400">Browse the projects available in your workspaces, then drill into the project record for files, questions, journal entries, and timeline details.</p>
       </section>
 
       <section className="rounded-[2rem] border border-sky-400/20 bg-sky-500/10 p-6 shadow-soft">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-sky-200">Quick project update</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">Search by town, choose the project, then add a note.</h3>
-            <p className="mt-1 text-sm leading-6 text-slate-300">This is the fastest path for a site update when someone only knows the town or branch name.</p>
+            <h3 className="mt-2 text-lg font-semibold text-white">Find a project</h3>
           </div>
           <Link to="/search" className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/10">
             <Search className="h-4 w-4" />
