@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { FileGrid } from '../components/uploads/FileGrid';
 import { Timeline } from '../components/timeline/Timeline';
 import { timelineStages } from '../constants/portal';
-import { addProjectComment, addProjectTask, answerProjectQuestion, askProjectQuestion, deleteProjectTask, getProjectById, getProjectFileUrl, markProjectQuestionRead, renameProjectFile, updateProjectTask, updateProjectWorkflow, uploadProjectFile, upsertProjectStageTask } from '../services/portalService';
+import { addProjectComment, addProjectTask, answerProjectQuestion, askProjectQuestion, deleteProjectTask, getProjectById, getProjectFileUrl, markProjectQuestionRead, renameProjectFile, updateProjectNotes, updateProjectTask, updateProjectWorkflow, uploadProjectFile, upsertProjectStageTask } from '../services/portalService';
 import { getUsers } from '../services/userService';
 import { useAuth } from '../contexts/AuthContext';
 import { canViewProject, getAllowedStageOptions, getRolePolicy, getWorkflowDenialReason } from '../utils/permissions';
@@ -18,6 +18,17 @@ const statusOptions: Array<{ value: ProjectStatus; label: string }> = [
   { value: 'delayed', label: 'Delayed' },
   { value: 'on_hold', label: 'On hold' },
   { value: 'cancelled', label: 'Cancelled' },
+];
+
+const projectSectionLinks = [
+  { number: '01', label: 'Timeline', href: '#timeline' },
+  { number: '02', label: 'Questions and update requests', href: '#questions' },
+  { number: '03', label: 'Workflow Actions', href: '#workflow-actions' },
+  { number: '04', label: 'Tasks', href: '#tasks' },
+  { number: '05', label: 'Files', href: '#files' },
+  { number: '06', label: 'Notes', href: '#notes' },
+  { number: '07', label: 'Project Journal', href: '#project-journal' },
+  { number: '08', label: 'Project update history', href: '#project-update-history' },
 ];
 
 function calculateTimelineWorkflow(project: Project, changedStage: ProjectStage, completed: boolean) {
@@ -60,6 +71,7 @@ export function ProjectDetailPage() {
   const [status, setStatus] = useState<ProjectStatus>('in_progress');
   const [progress, setProgress] = useState(0);
   const [commentMessage, setCommentMessage] = useState('');
+  const [notesDraft, setNotesDraft] = useState('');
   const [questionMessage, setQuestionMessage] = useState('');
   const [questionStage, setQuestionStage] = useState<'' | ProjectStage>('');
   const [answeringQuestionId, setAnsweringQuestionId] = useState<string | null>(null);
@@ -93,6 +105,7 @@ export function ProjectDetailPage() {
       setStage(project.currentStage);
       setStatus(project.status);
       setProgress(project.progress);
+      setNotesDraft(project.notes);
     }
   }, [project]);
 
@@ -125,6 +138,15 @@ export function ProjectDetailPage() {
       setCommentMessage('');
       await syncProject(updatedProject);
     },
+  });
+
+  const notesMutation = useMutation({
+    mutationFn: () => updateProjectNotes({
+      projectId: projectId ?? '',
+      actor: user?.name ?? 'Workspace user',
+      notes: notesDraft,
+    }),
+    onSuccess: syncProject,
   });
 
   const questionMutation = useMutation({
@@ -300,6 +322,7 @@ export function ProjectDetailPage() {
 
   const fileError = uploadMutation.error ?? previewMutation.error ?? downloadMutation.error;
   const workflowError = workflowMutation.error ?? timelineTaskMutation.error ?? commentMutation.error ?? questionMutation.error ?? answerQuestionMutation.error ?? readQuestionMutation.error ?? taskMutation.error ?? updateTaskMutation.error ?? deleteTaskMutation.error;
+  const notesError = notesMutation.error;
   const rolePolicy = getRolePolicy(user);
   const canAdministerProjectDetails = Boolean(user?.isPlatformOwner);
   const canUploadFiles = canAdministerProjectDetails && Boolean(rolePolicy?.files.canUploadFiles);
@@ -340,6 +363,8 @@ export function ProjectDetailPage() {
   const unreadAnswers = projectQuestions.filter((question) => question.status === 'answered' && question.unreadForRequester && isQuestionRequester(question));
   const adHocTasks = selectedProject.tasks.filter((task) => !task.stage);
   const canUpdateTimelineStages = canViewProject(user, selectedProject);
+  const canEditNotes = canViewProject(user, selectedProject);
+  const hasNotesChange = notesDraft.trim() !== selectedProject.notes.trim();
   const allowedStageOptions = getAllowedStageOptions(user, selectedProject, timelineStages);
   const hasAllowedStageChange = allowedStageOptions.some((item) => item !== selectedProject.currentStage);
   const workflowDenialReason = getWorkflowDenialReason(user, selectedProject, { currentStage: stage, status, progress });
@@ -367,6 +392,24 @@ export function ProjectDetailPage() {
         </div>
       </section>
 
+      <section className="sticky top-4 z-20 rounded-[2rem] border border-white/10 bg-slate-950/92 p-4 shadow-soft backdrop-blur scroll-mt-24">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.28em] text-teal-200/80">Project menu</p>
+            <h3 className="mt-1 text-lg font-semibold text-white">Jump to a workspace block</h3>
+          </div>
+          <Link to="/projects" className="text-sm font-semibold text-sky-200 transition hover:text-sky-100">Back to projects</Link>
+        </div>
+        <nav className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {projectSectionLinks.map((item) => (
+            <a key={item.href} href={item.href} className="group grid min-h-20 rounded-2xl border border-white/10 bg-white/5 p-3 transition hover:border-sky-300/35 hover:bg-sky-500/10">
+              <span className="text-xs font-semibold text-sky-200">#{item.number}</span>
+              <span className="mt-2 text-sm font-semibold leading-5 text-white group-hover:text-sky-100">{item.label}</span>
+            </a>
+          ))}
+        </nav>
+      </section>
+
       <section id="project-note" className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-6 shadow-soft scroll-mt-24">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -388,19 +431,21 @@ export function ProjectDetailPage() {
         </div>
       </section>
 
-      <Timeline
-        stages={timelineStages}
-        activeStage={selectedProject.currentStage}
-        tasks={selectedProject.tasks}
-        users={users}
-        canCompleteStages={canUpdateTimelineStages}
-        canAssignStages={canAdministerProjectDetails && canAssignTasks}
-        isUpdating={timelineTaskMutation.isPending}
-        onToggleStage={(timelineStage, completed) => timelineTaskMutation.mutate({ stage: timelineStage, completed })}
-        onAssignStage={(timelineStage, assigneeEmail) => timelineTaskMutation.mutate({ stage: timelineStage, assigneeEmail })}
-      />
+      <section id="timeline" className="scroll-mt-40">
+        <Timeline
+          stages={timelineStages}
+          activeStage={selectedProject.currentStage}
+          tasks={selectedProject.tasks}
+          users={users}
+          canCompleteStages={canUpdateTimelineStages}
+          canAssignStages={canAdministerProjectDetails && canAssignTasks}
+          isUpdating={timelineTaskMutation.isPending}
+          onToggleStage={(timelineStage, completed) => timelineTaskMutation.mutate({ stage: timelineStage, completed })}
+          onAssignStage={(timelineStage, assigneeEmail) => timelineTaskMutation.mutate({ stage: timelineStage, assigneeEmail })}
+        />
+      </section>
 
-      <section className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft">
+      <section id="questions" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-white">Questions and update requests</h3>
@@ -524,8 +569,7 @@ export function ProjectDetailPage() {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft">
+      <section id="workflow-actions" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
           <h3 className="text-lg font-semibold text-white">Workflow Actions</h3>
           <p className="mt-1 text-sm text-slate-400">Francois administers project detail changes. Other users should leave text updates at the top of this page.</p>
           {!canAdministerProjectDetails ? <p className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">Direct project detail editing is restricted. Leave an update above for Francois to review.</p> : null}
@@ -558,9 +602,9 @@ export function ProjectDetailPage() {
           <button type="button" disabled={!canSubmitWorkflow || workflowMutation.isPending} onClick={() => workflowMutation.mutate()} className="mt-5 rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60">
             {workflowMutation.isPending ? 'Updating workflow...' : 'Update workflow'}
           </button>
-        </div>
+      </section>
 
-        <div className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft">
+      <section id="tasks" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
           <h3 className="text-lg font-semibold text-white">Tasks</h3>
           <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_14rem_auto]">
             <input value={taskText} disabled={!canAddTasks} onChange={(event) => setTaskText(event.target.value)} placeholder={canAddTasks ? 'Add next action...' : 'Task updates restricted'} className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400/50 disabled:cursor-not-allowed disabled:opacity-60" />
@@ -607,10 +651,9 @@ export function ProjectDetailPage() {
               </div>
             )) : <p className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-4 text-sm text-slate-400">No open tasks.</p>}
           </div>
-        </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+      <section id="files" className="scroll-mt-40">
         <FileGrid
           files={selectedProject.files}
           isUploading={uploadMutation.isPending || previewMutation.isPending || downloadMutation.isPending}
@@ -621,41 +664,51 @@ export function ProjectDetailPage() {
           onDownload={(file: ProjectFile) => downloadMutation.mutate(file)}
           onRename={(file: ProjectFile, nextName) => renameFileMutation.mutate({ file, nextName })}
         />
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft">
+      </section>
+
+      <section id="notes" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
             <h3 className="text-lg font-semibold text-white">Notes</h3>
-            <p className="mt-4 text-sm leading-6 text-slate-300">{selectedProject.notes}</p>
+            <p className="mt-1 text-sm text-slate-400">Edit project notes here. Saved changes are written to the Project Journal.</p>
           </div>
-          <div className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft">
-            <h3 className="text-lg font-semibold text-white">Project Journal</h3>
-            <div className="mt-4 space-y-3">
-              {selectedProject.activity.length > 0 ? selectedProject.activity.map((item, index) => (
-                <div key={`${item.date}-${item.title}-${item.detail}-${index}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-medium text-white">{item.title}</p>
-                    <p className="shrink-0 text-xs text-slate-500">{item.date}</p>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-300">{item.detail}</p>
-                </div>
-              )) : <p className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-4 text-sm text-slate-400">No activity recorded yet.</p>}
+          <button type="button" disabled={!canEditNotes || notesMutation.isPending || !hasNotesChange} onClick={() => notesMutation.mutate()} className="w-fit rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50">
+            {notesMutation.isPending ? 'Saving notes...' : 'Save notes'}
+          </button>
+        </div>
+        <textarea value={notesDraft} disabled={!canEditNotes || notesMutation.isPending} onChange={(event) => setNotesDraft(event.target.value)} rows={6} placeholder="Add project notes..." className="mt-5 w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-base leading-7 text-white outline-none placeholder:text-slate-500 focus:border-sky-400/50 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm sm:leading-6" />
+        {notesError instanceof Error ? <p className="mt-3 text-sm text-red-300">{notesError.message}</p> : null}
+      </section>
+
+      <section id="project-journal" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
+        <h3 className="text-lg font-semibold text-white">Project Journal</h3>
+        <div className="mt-4 space-y-3">
+          {selectedProject.activity.length > 0 ? selectedProject.activity.map((item, index) => (
+            <div key={`${item.date}-${item.title}-${item.detail}-${index}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-medium text-white">{item.title}</p>
+                <p className="shrink-0 text-xs text-slate-500">{item.date}</p>
+              </div>
+              <p className="mt-2 text-sm text-slate-300">{item.detail}</p>
             </div>
-          </div>
-          <div className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft">
-            <h3 className="text-lg font-semibold text-white">Project update history</h3>
-            <p className="mt-1 text-sm text-slate-400">Updates left for Francois appear here after they are saved.</p>
-            <div className="mt-4 space-y-4">
-              {projectComments.map((comment) => (
-                <div key={`${comment.date}-${comment.author}-${comment.message}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <p className="font-medium text-white">{comment.author}</p>
-                    <p className="text-slate-500">{comment.date}</p>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-300">{comment.message}</p>
-                </div>
-              ))}
-              {projectComments.length === 0 ? <p className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-4 text-sm text-slate-400">No comments recorded yet.</p> : null}
+          )) : <p className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-4 text-sm text-slate-400">No activity recorded yet.</p>}
+        </div>
+      </section>
+
+      <section id="project-update-history" className="rounded-3xl border border-white/10 bg-white/6 p-6 shadow-soft scroll-mt-40">
+        <h3 className="text-lg font-semibold text-white">Project update history</h3>
+        <p className="mt-1 text-sm text-slate-400">Updates left for Francois appear here after they are saved.</p>
+        <div className="mt-4 space-y-4">
+          {projectComments.map((comment) => (
+            <div key={`${comment.date}-${comment.author}-${comment.message}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <p className="font-medium text-white">{comment.author}</p>
+                <p className="text-slate-500">{comment.date}</p>
+              </div>
+              <p className="mt-2 text-sm text-slate-300">{comment.message}</p>
             </div>
-          </div>
+          ))}
+          {projectComments.length === 0 ? <p className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-4 text-sm text-slate-400">No comments recorded yet.</p> : null}
         </div>
       </section>
     </div>
